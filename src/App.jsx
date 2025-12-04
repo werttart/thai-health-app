@@ -11,14 +11,14 @@ import {
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
-  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously
 } from 'firebase/auth';
 import { 
   getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, 
-  serverTimestamp, setDoc, deleteDoc, query, orderBy, getDoc
+  serverTimestamp, setDoc, deleteDoc, query, orderBy, getDoc, where, getDocs
 } from 'firebase/firestore';
 
-// --- 1. การตั้งค่า Firebase (ใช้ Key ของคุณโดยตรง) ---
+// --- 1. การตั้งค่า Firebase (ใช้ Key ของคุณ) ---
 const firebaseConfig = {
   apiKey: "AIzaSyBILcG2lnb_dhsENlPtYboFrGj_gP3D3d8",
   authDomain: "thaihealth-fcd28.firebaseapp.com",
@@ -33,8 +33,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// ใช้ Collection นี้เพื่อเก็บข้อมูล (แยกตาม App ID ไม่ให้ปนกัน)
-const APP_COLLECTION = "thai_health_pro_v1";
+
+// *** สำคัญ: ชื่อนี้ต้องตรงกับใน Database ของคุณ ***
+const APP_COLLECTION = "thai-health-production-v1"; 
 
 // --- Helpers ---
 const getTodayStr = () => {
@@ -174,14 +175,28 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         if (!targetUid) return;
         setTodayTip(HEALTH_TIPS[Math.floor(Math.random() * HEALTH_TIPS.length)]);
         
-        const userRef = collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'medications');
-        
         const unsubMeds = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'medications'), s => setMeds(s.docs.map(d => ({id: d.id, ...d.data()}))));
         const unsubHistory = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'daily_logs'), s => { const h = {}; s.docs.forEach(d => h[d.id] = d.data()); setMedHistory(h); });
         const unsubAppts = onSnapshot(query(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'appointments'), orderBy('date')), s => setAppointments(s.docs.map(d => ({id: d.id, ...d.data()}))));
         const unsubFamily = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'family_members'), s => setFamily(s.docs.map(d => ({id: d.id, ...d.data()}))));
-        const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), s => { 
-            if(s.exists()) { setProfile(s.data()); setFormProfile(s.data()); }
+        const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), async (s) => { 
+            if(s.exists()) { 
+                const data = s.data();
+                setProfile(data); 
+                setFormProfile(data); 
+                
+                // --- SELF-HEALING: ตรวจสอบและซ่อมแซม Smart ID ถ้าหาไม่เจอ ---
+                if (currentUserRole === 'patient' && data.shortId) {
+                    const publicIdsRef = collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids');
+                    const qSmart = query(publicIdsRef, where("smartId", "==", data.shortId));
+                    const snap = await getDocs(qSmart);
+                    if(snap.empty) {
+                        console.log("Fixing missing Public ID...");
+                        await addDoc(publicIdsRef, { smartId: data.shortId, uid: targetUid, createdAt: serverTimestamp() });
+                    }
+                }
+                // -----------------------------------------------------------
+            }
         });
         const unsubHealth = onSnapshot(query(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), orderBy('timestamp')), s => {
              const logs = s.docs.map(d => ({id: d.id, ...d.data()}));
@@ -192,7 +207,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
              setLoading(false);
         });
         return () => { unsubMeds(); unsubHistory(); unsubAppts(); unsubFamily(); unsubProfile(); unsubHealth(); };
-    }, [targetUid]);
+    }, [targetUid, currentUserRole]);
 
     // Handlers
     const handleAddHealth = async () => { 
@@ -276,7 +291,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             {activeTab === 'care' && (
                 <div className="p-5">
                     <div className="flex justify-between items-center mb-4"><h1 className="text-xl font-bold">ใบนัดหมอ</h1><button onClick={() => { setFormAppt({date:'',time:'',location:'',dept:''}); setEditApptId(null); setShowApptModal(true); }} className="bg-orange-50 text-orange-600 px-3 py-1 text-xs rounded-lg font-bold">+ เพิ่มนัด</button></div>
-                    <div className="space-y-3">{appointments.map(a => (<div key={a.id} className="bg-white p-4 rounded-xl border-l-4 border-orange-500 shadow-sm flex justify-between"><div><div className="flex gap-2 text-xs text-orange-600 font-bold mb-1"><span>{formatDateThai(a.date)}</span><span>{a.time}</span></div><h3 className="font-bold text-sm">{a.location}</h3><p className="text-xs text-gray-500">{a.dept}</p></div><button onClick={() => requestDelete('appointments', a.id, 'นัดหมาย')} className="text-gray-300"><Trash2 size={16}/></button></div>))}</div>
+                    <div className="space-y-3">{appointments.map(a => (<div key={a.id} className="bg-white p-4 rounded-xl border-l-4 border-orange-500 shadow-sm flex justify-between"><div><div className="flex gap-2 text-xs text-orange-600 font-bold mb-1"><span>{formatDateThai(a.date)}</span><span>{a.time}</span></div><h3 className="font-bold text-sm">{a.location}</h3><p className="text-xs text-gray-500">{a.dept}</p></div><div className="flex items-center gap-2"><button onClick={() => { setFormAppt(a); setEditApptId(a.id); setShowApptModal(true); }} className="text-gray-400"><Edit2 size={16}/></button><button onClick={() => requestDelete('appointments', a.id, 'นัดหมาย')} className="text-gray-300"><Trash2 size={16}/></button></div></div>))}</div>
                 </div>
             )}
 
@@ -291,7 +306,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                         <div className="flex justify-between items-center bg-red-50 p-3 rounded-xl cursor-pointer active:scale-95 transition-all" onClick={fetchLocation}><div className="flex items-center gap-3"><div className="bg-red-100 p-2 rounded-full text-red-600"><Phone size={20}/></div><div><h3 className="font-bold text-red-800 text-sm">1669 ฉุกเฉิน</h3><p className="text-[10px] text-red-400">{gpsLocation ? `พิกัด: ${gpsLocation}` : 'แตะเพื่อดูพิกัด GPS'}</p></div></div></div>
                     </div>
                     <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"><div className="flex items-center gap-2"><Type className="text-gray-500" size={20}/><span className="text-sm font-bold text-gray-700">ขนาดตัวอักษร</span></div><div className="flex gap-1 bg-gray-100 p-1 rounded-lg"><button onClick={() => setFontSize('normal')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${fontSize === 'normal' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>ปกติ</button><button onClick={() => setFontSize('large')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${fontSize === 'large' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>ใหญ่</button></div></div>
-                    <div className="mb-4"><div className="flex justify-between items-center mb-2"><h3 className="font-bold text-gray-800 text-sm">ลูกหลาน ({family.length})</h3><button onClick={() => { setFormFamily({name:'',phone:'',relation:'ลูก'}); setEditFamilyId(null); setShowFamilyModal(true); }} className="text-indigo-600 text-xs font-bold">+ เพิ่ม</button></div>{family.map(f => <div key={f.id} className="flex justify-between p-3 bg-white rounded-xl mb-2"><span className="text-sm">{f.name} ({f.relation})</span><Trash2 size={16} className="text-gray-300" onClick={() => requestDelete('family_members', f.id, f.name)}/></div>)}</div>
+                    <div className="mb-4"><div className="flex justify-between items-center mb-2"><h3 className="font-bold text-gray-800 text-sm">ลูกหลาน ({family.length})</h3><button onClick={() => { setFormFamily({name:'',phone:'',relation:'ลูก'}); setEditFamilyId(null); setShowFamilyModal(true); }} className="text-indigo-600 text-xs font-bold">+ เพิ่ม</button></div>{family.map(f => <div key={f.id} className="flex justify-between p-3 bg-white rounded-xl mb-2"><span className="text-sm">{f.name} ({f.relation})</span><div className="flex gap-2"><Edit2 size={16} className="text-gray-300" onClick={() => { setFormFamily(f); setEditFamilyId(f.id); setShowFamilyModal(true); }}/><Trash2 size={16} className="text-gray-300" onClick={() => requestDelete('family_members', f.id, f.name)}/></div></div>)}</div>
                     <button onClick={handleBackupData} className="w-full bg-gray-100 text-gray-600 p-3 rounded-xl flex items-center justify-center gap-2 text-sm mb-4"><Download size={16}/> สำรองข้อมูล</button>
                     <button onClick={() => signOut(auth)} className="w-full text-center text-red-400 text-sm p-2 underline">ออกจากระบบ</button>
                 </div>
@@ -372,6 +387,7 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
     const [patients, setPatients] = useState([]);
     const [addId, setAddId] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
 
     useEffect(() => {
         const unsub = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching'), (snap) => {
@@ -382,13 +398,9 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
 
     const handleAddPatient = async () => {
         if(addId.length !== 6) return;
-        const q = query(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), orderBy('createdAt')); // Simulated query - in real app, we need exact match.
-        // Direct Query for specific Smart ID
-        // Note: This requires a separate public collection mapping SmartID -> UID
-        // For this Prototype, we will use a workaround:
-        // We will scan a known public collection `smart_ids`
+        setErrorMsg('');
         
-        // 1. Find User by Smart ID
+        // ค้นหาคนไข้จากรหัส Smart ID
         const publicIdsRef = collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids');
         const qSmart = query(publicIdsRef, where("smartId", "==", addId));
         const querySnapshot = await getDocs(qSmart);
@@ -397,18 +409,18 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
             const targetDoc = querySnapshot.docs[0];
             const targetUid = targetDoc.data().uid;
             
-            // 2. Fetch Profile Name
+            // ดึงชื่อคนไข้มาแสดง
             const profileSnap = await getDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'));
             const patientName = profileSnap.exists() ? profileSnap.data().name : `คนไข้ (${addId})`;
 
-            // 3. Add to Watch List
+            // เพิ่มลงในรายการดูแลของเรา
             await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', targetUid), {
                 name: patientName,
                 addedAt: serverTimestamp()
             });
             setShowAddModal(false); setAddId('');
         } else {
-            alert('ไม่พบรหัส Smart ID นี้ในระบบ');
+            setErrorMsg('ไม่พบรหัส Smart ID นี้ในระบบ กรุณาตรวจสอบอีกครั้ง');
         }
     };
 
@@ -417,20 +429,22 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
             <h1 className="text-2xl font-bold text-gray-800 mb-6 mt-4">ดูแลครอบครัว</h1>
             <div className="grid gap-3">
                 {patients.map(p => (
-                    <div key={p.uid} onClick={() => onSelectPatient(p.uid)} className="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center cursor-pointer active:scale-95 transition-all">
+                    <div key={p.uid} onClick={() => onSelectPatient(p.uid)} className="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center cursor-pointer active:scale-95 transition-all hover:border-blue-300">
                         <div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-xl">{p.name.charAt(0)}</div><h3 className="font-bold text-gray-800">{p.name}</h3></div>
                         <ChevronRight className="text-gray-300"/>
                     </div>
                 ))}
-                <button onClick={() => setShowAddModal(true)} className="bg-white p-4 rounded-2xl border-2 border-dashed flex justify-center items-center gap-2 text-gray-400"><Plus/> เพิ่มคนไข้ใหม่</button>
+                <button onClick={() => setShowAddModal(true)} className="bg-white p-4 rounded-2xl border-2 border-dashed flex justify-center items-center gap-2 text-gray-400 hover:bg-gray-50"><Plus/> เพิ่มคนไข้ใหม่</button>
             </div>
             <button onClick={() => signOut(auth)} className="mt-8 w-full text-center text-red-400 underline">ออกจากระบบ</button>
             
             {showAddModal && (
-                <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white p-6 rounded-3xl w-full max-w-sm">
-                        <h3 className="font-bold text-center mb-4">ใส่รหัส Smart ID (6 หลัก)</h3>
-                        <input value={addId} onChange={e => setAddId(e.target.value)} className="w-full text-center text-3xl font-bold p-4 bg-gray-50 rounded-xl mb-4 tracking-widest" placeholder="000000" maxLength={6}/>
+                <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white p-6 rounded-3xl w-full max-w-sm shadow-2xl">
+                        <h3 className="font-bold text-center mb-2">ใส่รหัส Smart ID (6 หลัก)</h3>
+                        <p className="text-xs text-center text-gray-500 mb-4">รหัสนี้อยู่ที่หน้า "ฉัน" ของเครื่องคนไข้</p>
+                        <input value={addId} onChange={e => setAddId(e.target.value)} className="w-full text-center text-3xl font-bold p-4 bg-gray-50 rounded-xl mb-2 tracking-widest border focus:border-blue-500 outline-none" placeholder="000000" maxLength={6}/>
+                        {errorMsg && <p className="text-red-500 text-xs text-center mb-4">{errorMsg}</p>}
                         <div className="flex gap-3"><button onClick={() => setShowAddModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleAddPatient} className="flex-1 py-3 bg-blue-600 text-white rounded-xl">ค้นหา</button></div>
                     </div>
                 </div>
@@ -446,10 +460,7 @@ export default function App() {
   const [selectedPatientUid, setSelectedPatientUid] = useState(null);
 
   useEffect(() => {
-    const init = async () => {
-        // Check auth persistence handled by firebase
-    };
-    init();
+    const init = async () => { }; init();
     return onAuthStateChanged(auth, async (u) => { 
         setUser(u); 
         if(u) {
@@ -468,14 +479,14 @@ export default function App() {
           const shortId = generateSmartId();
           userData.shortId = shortId;
           await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'profile', 'main'), { name: "ผู้สูงอายุ", shortId }, { merge: true });
-          // Public Mapping for ID lookup (Using a random ID as doc ID to prevent hotspots, but store shortId as field)
+          // Public Mapping for ID lookup
           await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), { smartId: shortId, uid: user.uid, createdAt: serverTimestamp() });
       }
       await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid), userData, { merge: true });
       setRole(selectedRole);
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
+  if (loading) return <div className="h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
   if (!user) return <AuthScreen />;
   if (!role) return <RoleSelector onSelect={handleRoleSelect} />;
 
