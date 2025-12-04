@@ -7,7 +7,7 @@ import {
   Home, MessageCircle, FileText, Shield, Stethoscope, 
   Send, QrCode, MapPin, Loader2, Scale, Droplet,
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
-  Share2, Check, Edit2, X, AlertTriangle, Download, Type, Navigation, LogOut, Lock, Mail, Printer
+  Share2, Check, Edit2, X, AlertTriangle, Download, Type, Navigation, LogOut, Lock, Mail, Printer, Lightbulb
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -18,7 +18,7 @@ import {
   serverTimestamp, setDoc, deleteDoc, query, orderBy, getDoc
 } from 'firebase/firestore';
 
-// --- ส่วนตั้งค่า Firebase (ใส่รหัสของคุณให้แล้วครับ) ---
+// --- 1. การตั้งค่า Firebase (ใช้ Key ของคุณโดยตรง) ---
 const firebaseConfig = {
   apiKey: "AIzaSyBILcG2lnb_dhsENlPtYboFrGj_gP3D3d8",
   authDomain: "thaihealth-fcd28.firebaseapp.com",
@@ -33,8 +33,8 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// ตั้งชื่อแอพสำหรับเก็บข้อมูล
-const appId = "thai-health-production-v1";
+// ใช้ Collection นี้เพื่อเก็บข้อมูล (แยกตาม App ID ไม่ให้ปนกัน)
+const APP_COLLECTION = "thai_health_pro_v1";
 
 // --- Helpers ---
 const getTodayStr = () => {
@@ -53,100 +53,14 @@ const calculateAverage = (data, key) => {
     return Math.round(sum / data.length);
 };
 
-// --- AUTH COMPONENTS ---
+// --- Static Data ---
+const HEALTH_TIPS = [
+    "ดื่มน้ำวันละ 8 แก้ว ช่วยให้เลือดไหลเวียนดีนะ", "ระวังพื้นห้องน้ำลื่น ควรมีราวจับช่วยพยุง",
+    "กินปลาดีกว่ากินเนื้อแดง ย่อยง่าย", "แกว่งแขนวันละ 20 นาที ช่วยลดพุง",
+    "ลดเค็ม ลดโรค ปรุงรสน้อยลงหน่อยนะ", "นอนหลับให้เพียงพอ ตื่นมาจะสดชื่น"
+];
 
-const AuthScreen = () => {
-    const [isRegister, setIsRegister] = useState(false);
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    const handleAuth = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-        try {
-            if (isRegister) {
-                await createUserWithEmailAndPassword(auth, email, password);
-            } else {
-                await signInWithEmailAndPassword(auth, email, password);
-            }
-        } catch (err) {
-            setError("เกิดข้อผิดพลาด: " + err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 animate-fade-in">
-            <div className="bg-white w-full max-w-sm p-8 rounded-3xl shadow-xl">
-                <div className="text-center mb-8">
-                    <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-                        <Heart size={40} fill="currentColor" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-gray-800">ThaiHealth Care</h1>
-                    <p className="text-gray-500 text-sm">ระบบดูแลสุขภาพครอบครัว</p>
-                </div>
-
-                <form onSubmit={handleAuth} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">อีเมล</label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-3 text-gray-400" size={20}/>
-                            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full pl-10 p-3 bg-gray-50 rounded-xl border focus:border-blue-500 outline-none" placeholder="name@email.com" />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1 ml-1">รหัสผ่าน</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 text-gray-400" size={20}/>
-                            <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full pl-10 p-3 bg-gray-50 rounded-xl border focus:border-blue-500 outline-none" placeholder="******" />
-                        </div>
-                    </div>
-                    
-                    {error && <p className="text-red-500 text-xs text-center">{error}</p>}
-
-                    <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all flex justify-center items-center">
-                        {loading ? <Loader2 className="animate-spin"/> : (isRegister ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ')}
-                    </button>
-                </form>
-
-                <div className="mt-6 text-center">
-                    <p className="text-xs text-gray-400">
-                        {isRegister ? 'มีบัญชีอยู่แล้ว?' : 'ยังไม่มีบัญชี?'} 
-                        <button onClick={() => setIsRegister(!isRegister)} className="text-blue-600 font-bold ml-1 hover:underline">
-                            {isRegister ? 'เข้าสู่ระบบ' : 'สมัครใหม่'}
-                        </button>
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const RoleSelector = ({ onSelect }) => (
-    <div className="h-screen bg-white flex flex-col items-center justify-center p-6 animate-fade-in">
-        <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">เลือกสถานะของคุณ</h1>
-            <p className="text-gray-500 text-sm">ข้อมูลนี้จะใช้เพื่อปรับหน้าจอให้เหมาะสม</p>
-        </div>
-        <div className="space-y-4 w-full max-w-xs">
-            <button onClick={() => onSelect('patient')} className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-3xl shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center gap-4">
-                <div className="bg-white/20 p-3 rounded-2xl"><User size={32}/></div>
-                <div className="text-left"><h3 className="font-bold text-xl">ผู้สูงอายุ / ผู้ป่วย</h3><p className="text-xs text-blue-100 opacity-90">ต้องการจดบันทึกสุขภาพ</p></div>
-            </button>
-            <button onClick={() => onSelect('caregiver')} className="w-full bg-white border-2 border-gray-100 text-gray-700 p-6 rounded-3xl active:scale-95 transition-all flex items-center gap-4 hover:border-gray-300">
-                <div className="bg-gray-100 p-3 rounded-2xl"><Users size={32}/></div>
-                <div className="text-left"><h3 className="font-bold text-xl">ลูกหลาน / ผู้ดูแล</h3><p className="text-xs text-gray-400">ต้องการติดตามสุขภาพ</p></div>
-            </button>
-        </div>
-        <button onClick={() => signOut(auth)} className="mt-8 text-gray-400 text-sm underline">ออกจากระบบ</button>
-    </div>
-);
-
-// --- SHARED DASHBOARD COMPONENTS ---
+// --- Components ---
 
 const StatCard = ({ title, value, unit, icon: Icon, color, onClick, statusType, rawValue, fontSize }) => (
   <div onClick={onClick} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex-1 min-w-[100px] cursor-pointer hover:bg-gray-50 transition-all active:scale-95 relative overflow-hidden group">
@@ -172,6 +86,54 @@ const MedicineItem = ({ med, isTaken, onToggle, onDelete, onEdit, fontSize }) =>
   </div>
 );
 
+// --- Auth Screen ---
+const AuthScreen = () => {
+    const [isRegister, setIsRegister] = useState(false);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleAuth = async (e) => {
+        e.preventDefault(); setLoading(true); setError('');
+        try {
+            if (isRegister) await createUserWithEmailAndPassword(auth, email, password);
+            else await signInWithEmailAndPassword(auth, email, password);
+        } catch (err) { setError("รหัสผ่านไม่ถูกต้อง หรืออีเมลมีปัญหา: " + err.message); } 
+        finally { setLoading(false); }
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 animate-fade-in">
+            <div className="bg-white w-full max-w-sm p-8 rounded-3xl shadow-xl">
+                <div className="text-center mb-8">
+                    <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-sm"><Heart size={40} fill="currentColor" /></div>
+                    <h1 className="text-2xl font-bold text-gray-800">ThaiHealth</h1><p className="text-gray-500 text-sm">ดูแลสุขภาพครอบครัว</p>
+                </div>
+                <form onSubmit={handleAuth} className="space-y-4">
+                    <div><label className="text-xs font-bold text-gray-500 ml-1">อีเมล</label><div className="relative"><Mail className="absolute left-3 top-3 text-gray-400" size={20}/><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full pl-10 p-3 bg-gray-50 rounded-xl border focus:border-blue-500 outline-none" placeholder="email@example.com" /></div></div>
+                    <div><label className="text-xs font-bold text-gray-500 ml-1">รหัสผ่าน</label><div className="relative"><Lock className="absolute left-3 top-3 text-gray-400" size={20}/><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full pl-10 p-3 bg-gray-50 rounded-xl border focus:border-blue-500 outline-none" placeholder="******" /></div></div>
+                    {error && <p className="text-red-500 text-xs text-center">{error}</p>}
+                    <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white p-3 rounded-xl font-bold shadow-lg hover:bg-blue-700 transition-all flex justify-center items-center">{loading ? <Loader2 className="animate-spin"/> : (isRegister ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ')}</button>
+                </form>
+                <div className="mt-6 text-center"><p className="text-xs text-gray-400">{isRegister ? 'มีบัญชีแล้ว?' : 'ยังไม่มีบัญชี?'} <button onClick={() => setIsRegister(!isRegister)} className="text-blue-600 font-bold ml-1 hover:underline">{isRegister ? 'เข้าสู่ระบบ' : 'สมัครใหม่'}</button></p></div>
+            </div>
+        </div>
+    );
+};
+
+// --- Role Selector ---
+const RoleSelector = ({ onSelect }) => (
+    <div className="h-screen bg-white flex flex-col items-center justify-center p-6 animate-fade-in">
+        <div className="mb-8 text-center"><h1 className="text-2xl font-bold text-gray-800 mb-2">เลือกสถานะของคุณ</h1><p className="text-gray-500 text-sm">เพื่อให้แอพทำงานได้เหมาะสม</p></div>
+        <div className="space-y-4 w-full max-w-xs">
+            <button onClick={() => onSelect('patient')} className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-3xl shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center gap-4"><div className="bg-white/20 p-3 rounded-2xl"><User size={32}/></div><div className="text-left"><h3 className="font-bold text-xl">ผู้สูงอายุ / ผู้ป่วย</h3><p className="text-xs text-blue-100 opacity-90">จดบันทึกสุขภาพ</p></div></button>
+            <button onClick={() => onSelect('caregiver')} className="w-full bg-white border-2 border-gray-100 text-gray-700 p-6 rounded-3xl active:scale-95 transition-all flex items-center gap-4 hover:border-gray-300"><div className="bg-gray-100 p-3 rounded-2xl"><Users size={32}/></div><div className="text-left"><h3 className="font-bold text-xl">ลูกหลาน / ผู้ดูแล</h3><p className="text-xs text-gray-400">ติดตามพ่อแม่</p></div></button>
+        </div>
+        <button onClick={() => signOut(auth)} className="mt-8 text-gray-400 text-sm underline">ออกจากระบบ</button>
+    </div>
+);
+
 // --- PATIENT DASHBOARD ---
 const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [activeTab, setActiveTab] = useState('home');
@@ -187,6 +149,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     // Settings
     const [fontSize, setFontSize] = useState('normal'); 
     const [gpsLocation, setGpsLocation] = useState(null);
+    const [todayTip, setTodayTip] = useState(HEALTH_TIPS[0]);
 
     // UI & Forms
     const [showDoctorMode, setShowDoctorMode] = useState(false);
@@ -203,18 +166,24 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     // Modals
     const [showMedModal, setShowMedModal] = useState(false); const [editMedId, setEditMedId] = useState(null); const [formMed, setFormMed] = useState({});
     const [showApptModal, setShowApptModal] = useState(false); const [editApptId, setEditApptId] = useState(null); const [formAppt, setFormAppt] = useState({});
+    const [showFamilyModal, setShowFamilyModal] = useState(false); const [editFamilyId, setEditFamilyId] = useState(null); const [formFamily, setFormFamily] = useState({});
     const [showEditProfile, setShowEditProfile] = useState(false); const [formProfile, setFormProfile] = useState({});
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, collection: null, id: null, title: '' });
 
     useEffect(() => {
         if (!targetUid) return;
-        const unsubMeds = onSnapshot(collection(db, 'artifacts', appId, 'users', targetUid, 'medications'), s => setMeds(s.docs.map(d => ({id: d.id, ...d.data()}))));
-        const unsubHistory = onSnapshot(collection(db, 'artifacts', appId, 'users', targetUid, 'daily_logs'), s => { const h = {}; s.docs.forEach(d => h[d.id] = d.data()); setMedHistory(h); });
-        const unsubAppts = onSnapshot(query(collection(db, 'artifacts', appId, 'users', targetUid, 'appointments'), orderBy('date')), s => setAppointments(s.docs.map(d => ({id: d.id, ...d.data()}))));
-        const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', targetUid, 'profile', 'main'), s => { 
+        setTodayTip(HEALTH_TIPS[Math.floor(Math.random() * HEALTH_TIPS.length)]);
+        
+        const userRef = collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'medications');
+        
+        const unsubMeds = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'medications'), s => setMeds(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const unsubHistory = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'daily_logs'), s => { const h = {}; s.docs.forEach(d => h[d.id] = d.data()); setMedHistory(h); });
+        const unsubAppts = onSnapshot(query(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'appointments'), orderBy('date')), s => setAppointments(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const unsubFamily = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'family_members'), s => setFamily(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), s => { 
             if(s.exists()) { setProfile(s.data()); setFormProfile(s.data()); }
         });
-        const unsubHealth = onSnapshot(query(collection(db, 'artifacts', appId, 'users', targetUid, 'health_logs'), orderBy('timestamp')), s => {
+        const unsubHealth = onSnapshot(query(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), orderBy('timestamp')), s => {
              const logs = s.docs.map(d => ({id: d.id, ...d.data()}));
              setHealthLogs(logs); setLabLogs(logs.filter(l => l.type === 'lab'));
              setBpData(logs.filter(l => l.type === 'bp').slice(-14).map(l => ({ day: l.dateStr, sys: l.sys, dia: l.dia })));
@@ -222,37 +191,38 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
              setWeightData(logs.filter(l => l.type === 'weight').slice(-14).map(l => ({ day: l.dateStr, weight: l.weight })));
              setLoading(false);
         });
-        return () => { unsubMeds(); unsubHistory(); unsubAppts(); unsubProfile(); unsubHealth(); };
+        return () => { unsubMeds(); unsubHistory(); unsubAppts(); unsubFamily(); unsubProfile(); unsubHealth(); };
     }, [targetUid]);
 
+    // Handlers
     const handleAddHealth = async () => { 
         let data = { type: inputType, dateStr: getTodayStr(), timestamp: serverTimestamp() }; 
         if(inputType === 'bp') data = { ...data, sys: parseInt(formHealth.sys), dia: parseInt(formHealth.dia) }; 
         else if(inputType === 'sugar') data = { ...data, sugar: parseInt(formHealth.sugar) }; 
         else if(inputType === 'weight') data = { ...data, weight: parseFloat(formHealth.weight) };
         else if(inputType === 'lab') data = { ...data, hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr };
-        await addDoc(collection(db, 'artifacts', appId, 'users', targetUid, 'health_logs'), data); 
+        await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), data); 
         setShowInputModal(false); setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '' });
     };
-    
     const toggleMedToday = async (medId) => { 
         const today = getTodayStr(); 
-        const ref = doc(db, 'artifacts', appId, 'users', targetUid, 'daily_logs', today); 
+        const ref = doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'daily_logs', today); 
         const current = medHistory[today]?.takenMeds || []; 
         const newTaken = current.includes(medId) ? current.filter(id => id !== medId) : [...current, medId]; 
         await setDoc(ref, { takenMeds: newTaken, takenCount: newTaken.length }, { merge: true }); 
     };
-
     const requestDelete = (col, id, title) => setDeleteConfirm({ isOpen: true, collection: col, id: id, title: title });
-    const confirmDeleteAction = async () => { await deleteDoc(doc(db, 'artifacts', appId, 'users', targetUid, deleteConfirm.collection, deleteConfirm.id)); setDeleteConfirm({ isOpen: false, collection: null, id: null, title: '' }); };
+    const confirmDeleteAction = async () => { await deleteDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, deleteConfirm.collection, deleteConfirm.id)); setDeleteConfirm({ isOpen: false, collection: null, id: null, title: '' }); };
     
     // CRUD wrappers
-    const handleSaveMed = async () => { const c = collection(db, 'artifacts', appId, 'users', targetUid, 'medications'); if(editMedId) await updateDoc(doc(c, editMedId), formMed); else await addDoc(c, formMed); setShowMedModal(false); };
-    const handleSaveAppt = async () => { const c = collection(db, 'artifacts', appId, 'users', targetUid, 'appointments'); if(editApptId) await updateDoc(doc(c, editApptId), formAppt); else await addDoc(c, formAppt); setShowApptModal(false); };
-    const handleUpdateProfile = async () => { await updateDoc(doc(db, 'artifacts', appId, 'users', targetUid, 'profile', 'main'), formProfile); setShowEditProfile(false); };
+    const handleSaveMed = async () => { const c = collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'medications'); if(editMedId) await updateDoc(doc(c, editMedId), formMed); else await addDoc(c, formMed); setShowMedModal(false); };
+    const handleSaveAppt = async () => { const c = collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'appointments'); if(editApptId) await updateDoc(doc(c, editApptId), formAppt); else await addDoc(c, formAppt); setShowApptModal(false); };
+    const handleSaveFamily = async () => { const c = collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'family_members'); if(editFamilyId) await updateDoc(doc(c, editFamilyId), formFamily); else await addDoc(c, formFamily); setShowFamilyModal(false); };
+    const handleUpdateProfile = async () => { await updateDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), formProfile); setShowEditProfile(false); };
     
     const fetchLocation = () => { if (navigator.geolocation) { navigator.geolocation.getCurrentPosition((p) => setGpsLocation(`${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`)); } else setGpsLocation("อุปกรณ์ไม่รองรับ"); };
-    
+    const handleBackupData = () => { const data = { profile, medications: meds, appointments, logs: healthLogs, exportDate: new Date().toISOString() }; const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); const a = document.createElement('a'); a.href = dataStr; a.download = `backup_${getTodayStr()}.json`; a.click(); };
+
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-600"/></div>;
 
     const latestBP = healthLogs.filter(x => x.type === 'bp').pop();
@@ -265,10 +235,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             <div className="bg-white p-5 pt-8 pb-4 sticky top-0 z-30 shadow-sm flex justify-between items-center rounded-b-3xl">
                 <div className="flex items-center gap-3">
                     {currentUserRole === 'caregiver' && <button onClick={onBack} className="bg-gray-100 p-2 rounded-full"><ChevronLeft/></button>}
-                    <div>
-                        <h1 className={`font-bold text-gray-800 ${fontSize === 'large' ? 'text-xl' : 'text-lg'}`}>{profile?.name || '...'}</h1>
-                        <p className="text-gray-500 text-xs">{currentUserRole === 'caregiver' ? 'โหมดผู้ดูแล' : 'ดูแลสุขภาพตัวเอง'}</p>
-                    </div>
+                    <div><h1 className={`font-bold text-gray-800 ${fontSize === 'large' ? 'text-xl' : 'text-lg'}`}>{profile?.name || '...'}</h1><p className="text-gray-500 text-xs">{currentUserRole === 'caregiver' ? 'โหมดผู้ดูแล' : 'ดูแลสุขภาพตัวเอง'}</p></div>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => setShowDoctorMode(true)} className="bg-indigo-50 text-indigo-600 p-2 rounded-full border border-indigo-100 shadow-sm"><Stethoscope size={20}/></button>
@@ -279,16 +246,14 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             {/* Content Switcher */}
             {activeTab === 'home' && (
                 <div className="px-5 mt-4 space-y-6">
+                    <div className="bg-indigo-600 text-white p-3 text-xs flex items-center justify-center gap-2 rounded-xl shadow-md"><Lightbulb size={16} className="text-yellow-300"/><span>{todayTip}</span></div>
                     <div className="grid grid-cols-3 gap-3">
                         <StatCard title="ความดัน" value={latestBP ? `${latestBP.sys}/${latestBP.dia}` : '-'} rawValue={latestBP?.sys} statusType="sys" unit="mmHg" icon={Heart} color="bg-gradient-to-br from-pink-400 to-pink-600" onClick={() => {}} fontSize={fontSize}/>
                         <StatCard title="น้ำตาล" value={latestSugar ? latestSugar.sugar : '-'} rawValue={latestSugar?.sugar} statusType="sugar" unit="mg/dL" icon={Droplet} color="bg-gradient-to-br from-emerald-400 to-emerald-600" onClick={() => {}} fontSize={fontSize}/>
                         <StatCard title="น้ำหนัก" value={latestWeight ? latestWeight.weight : '-'} unit="kg" icon={Scale} color="bg-gradient-to-br from-orange-400 to-orange-600" onClick={() => {}} fontSize={fontSize}/>
                     </div>
                     <div>
-                        <div className="flex justify-between items-center mb-3">
-                            <h2 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Pill size={16} className="text-blue-500"/> ยาของฉัน</h2>
-                            <button onClick={() => { setFormMed({name:'', time:'หลังอาหารเช้า', dose:''}); setEditMedId(null); setShowMedModal(true); }} className="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1 rounded-lg">+ เพิ่ม</button>
-                        </div>
+                        <div className="flex justify-between items-center mb-3"><h2 className="font-bold text-gray-800 text-sm flex items-center gap-2"><Pill size={16} className="text-blue-500"/> ยาของฉัน</h2><button onClick={() => { setFormMed({name:'', time:'หลังอาหารเช้า', dose:''}); setEditMedId(null); setShowMedModal(true); }} className="text-blue-600 text-xs font-bold bg-blue-50 px-3 py-1 rounded-lg">+ เพิ่ม</button></div>
                         {meds.map(med => {
                             const isTaken = (medHistory[getTodayStr()]?.takenMeds || []).includes(med.id);
                             return <MedicineItem key={med.id} med={med} isTaken={isTaken} onToggle={() => toggleMedToday(med.id)} onDelete={() => requestDelete('medications', med.id, med.name)} onEdit={() => { setFormMed(med); setEditMedId(med.id); setShowMedModal(true); }} fontSize={fontSize} />;
@@ -299,7 +264,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
 
             {activeTab === 'stats' && (
                 <div className="p-5">
-                    <div className="flex bg-gray-100 p-1 rounded-xl mb-6"><button onClick={() => setStatType('bp')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${statType === 'bp' ? 'bg-white shadow text-pink-600' : 'text-gray-400'}`}>ความดัน</button><button onClick={() => setStatType('sugar')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${statType === 'sugar' ? 'bg-white shadow text-emerald-600' : 'text-gray-400'}`}>น้ำตาล</button><button onClick={() => setStatType('lab')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${statType === 'lab' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}>ผลเลือด</button></div>
+                    <div className="flex bg-gray-100 p-1 rounded-xl mb-6 overflow-x-auto"><button onClick={() => setStatType('bp')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${statType === 'bp' ? 'bg-white shadow text-pink-600' : 'text-gray-400'}`}>ความดัน</button><button onClick={() => setStatType('sugar')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${statType === 'sugar' ? 'bg-white shadow text-emerald-600' : 'text-gray-400'}`}>น้ำตาล</button><button onClick={() => setStatType('lab')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${statType === 'lab' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}>ผลเลือด</button></div>
                     {statType === 'lab' ? (
                         <div className="bg-white p-4 rounded-2xl shadow-sm border">{labLogs.slice(-3).map((l, i) => <div key={i} className="mb-2 border-b pb-2 text-sm"><span className="text-gray-400 text-xs">{l.dateStr}</span><div className="flex justify-between mt-1"><span>HbA1c: <b>{l.hba1c}</b></span><span>Lipid: <b>{l.lipid}</b></span></div></div>)}</div>
                     ) : (
@@ -311,43 +276,24 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             {activeTab === 'care' && (
                 <div className="p-5">
                     <div className="flex justify-between items-center mb-4"><h1 className="text-xl font-bold">ใบนัดหมอ</h1><button onClick={() => { setFormAppt({date:'',time:'',location:'',dept:''}); setEditApptId(null); setShowApptModal(true); }} className="bg-orange-50 text-orange-600 px-3 py-1 text-xs rounded-lg font-bold">+ เพิ่มนัด</button></div>
-                    <div className="space-y-3">{appointments.map(a => (
-                        <div key={a.id} className="bg-white p-4 rounded-xl border-l-4 border-orange-500 shadow-sm flex justify-between">
-                            <div><div className="flex gap-2 text-xs text-orange-600 font-bold mb-1"><span>{formatDateThai(a.date)}</span><span>{a.time}</span></div><h3 className="font-bold text-sm">{a.location}</h3><p className="text-xs text-gray-500">{a.dept}</p></div>
-                            <button onClick={() => requestDelete('appointments', a.id, 'นัดหมาย')} className="text-gray-300"><Trash2 size={16}/></button>
-                        </div>
-                    ))}</div>
+                    <div className="space-y-3">{appointments.map(a => (<div key={a.id} className="bg-white p-4 rounded-xl border-l-4 border-orange-500 shadow-sm flex justify-between"><div><div className="flex gap-2 text-xs text-orange-600 font-bold mb-1"><span>{formatDateThai(a.date)}</span><span>{a.time}</span></div><h3 className="font-bold text-sm">{a.location}</h3><p className="text-xs text-gray-500">{a.dept}</p></div><button onClick={() => requestDelete('appointments', a.id, 'นัดหมาย')} className="text-gray-300"><Trash2 size={16}/></button></div>))}</div>
                 </div>
             )}
 
             {activeTab === 'profile' && currentUserRole === 'patient' && (
                 <div className="p-5">
                     <div className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-3xl shadow-lg mb-6 text-center">
-                        <p className="text-blue-200 text-sm mb-2">Smart ID ของฉัน</p>
-                        <h1 className="text-5xl font-bold tracking-widest mb-4">{profile?.shortId || '------'}</h1>
-                        <p className="text-xs opacity-80">บอกรหัสนี้ให้ลูกหลานเพื่อเชื่อมต่อข้อมูล</p>
+                        <p className="text-blue-200 text-sm mb-2">Smart ID ของฉัน</p><h1 className="text-5xl font-bold tracking-widest mb-4">{profile?.shortId || '------'}</h1><p className="text-xs opacity-80">บอกรหัสนี้ให้ลูกหลานเพื่อเชื่อมต่อข้อมูล</p>
                     </div>
-                    
                     <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm mb-4">
                         <h3 className="font-bold text-gray-800 mb-2">ข้อมูลส่วนตัว</h3>
-                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl mb-2">
-                            <div><p className="text-xs text-gray-500">ชื่อ</p><p className="font-bold">{profile?.name}</p></div>
-                            <button onClick={() => setShowEditProfile(true)}><Edit2 size={16} className="text-gray-400"/></button>
-                        </div>
-                        <div className="flex justify-between items-center bg-red-50 p-3 rounded-xl cursor-pointer active:scale-95 transition-all" onClick={fetchLocation}>
-                            <div className="flex items-center gap-3"><div className="bg-red-100 p-2 rounded-full text-red-600"><Phone size={20}/></div><div><h3 className="font-bold text-red-800 text-sm">1669 ฉุกเฉิน</h3><p className="text-[10px] text-red-400">{gpsLocation ? `พิกัด: ${gpsLocation}` : 'แตะเพื่อดูพิกัด GPS'}</p></div></div>
-                        </div>
+                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl mb-2"><div><p className="text-xs text-gray-500">ชื่อ</p><p className="font-bold">{profile?.name}</p></div><button onClick={() => { setFormProfile(profile); setShowEditProfile(true); }}><Edit2 size={16} className="text-gray-400"/></button></div>
+                        <div className="flex justify-between items-center bg-red-50 p-3 rounded-xl cursor-pointer active:scale-95 transition-all" onClick={fetchLocation}><div className="flex items-center gap-3"><div className="bg-red-100 p-2 rounded-full text-red-600"><Phone size={20}/></div><div><h3 className="font-bold text-red-800 text-sm">1669 ฉุกเฉิน</h3><p className="text-[10px] text-red-400">{gpsLocation ? `พิกัด: ${gpsLocation}` : 'แตะเพื่อดูพิกัด GPS'}</p></div></div></div>
                     </div>
-
-                    <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
-                        <div className="flex items-center gap-2"><Type className="text-gray-500" size={20}/><span className="text-sm font-bold text-gray-700">ขนาดตัวอักษร</span></div>
-                        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-                            <button onClick={() => setFontSize('normal')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${fontSize === 'normal' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>ปกติ</button>
-                            <button onClick={() => setFontSize('large')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${fontSize === 'large' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>ใหญ่</button>
-                        </div>
-                    </div>
-                    
-                    <button onClick={() => signOut(auth)} className="w-full text-center text-red-400 text-sm mt-4 p-4">ออกจากระบบ</button>
+                    <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm"><div className="flex items-center gap-2"><Type className="text-gray-500" size={20}/><span className="text-sm font-bold text-gray-700">ขนาดตัวอักษร</span></div><div className="flex gap-1 bg-gray-100 p-1 rounded-lg"><button onClick={() => setFontSize('normal')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${fontSize === 'normal' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>ปกติ</button><button onClick={() => setFontSize('large')} className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${fontSize === 'large' ? 'bg-white shadow text-blue-600' : 'text-gray-400'}`}>ใหญ่</button></div></div>
+                    <div className="mb-4"><div className="flex justify-between items-center mb-2"><h3 className="font-bold text-gray-800 text-sm">ลูกหลาน ({family.length})</h3><button onClick={() => { setFormFamily({name:'',phone:'',relation:'ลูก'}); setEditFamilyId(null); setShowFamilyModal(true); }} className="text-indigo-600 text-xs font-bold">+ เพิ่ม</button></div>{family.map(f => <div key={f.id} className="flex justify-between p-3 bg-white rounded-xl mb-2"><span className="text-sm">{f.name} ({f.relation})</span><Trash2 size={16} className="text-gray-300" onClick={() => requestDelete('family_members', f.id, f.name)}/></div>)}</div>
+                    <button onClick={handleBackupData} className="w-full bg-gray-100 text-gray-600 p-3 rounded-xl flex items-center justify-center gap-2 text-sm mb-4"><Download size={16}/> สำรองข้อมูล</button>
+                    <button onClick={() => signOut(auth)} className="w-full text-center text-red-400 text-sm p-2 underline">ออกจากระบบ</button>
                 </div>
             )}
 
@@ -360,19 +306,29 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                 <button onClick={() => setActiveTab('profile')} className={`flex-1 p-2 flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-blue-600' : 'text-gray-400'}`}><User size={24}/><span className="text-[10px]">ฉัน</span></button>
             </div>
 
-            {/* Modals included in dashboard */}
+            {/* Doctor Mode Modal */}
             {showDoctorMode && (
                 <div className="fixed inset-0 bg-white z-[70] overflow-y-auto animate-fade-in p-6">
                     <div className="flex justify-between items-center mb-6"><h1 className="text-xl font-bold">สรุปประวัติสุขภาพ</h1><button onClick={() => setShowDoctorMode(false)}><X/></button></div>
                     <div className="bg-gray-50 p-4 rounded-xl border mb-4">
                         <h2 className="font-bold text-gray-700">ผู้ป่วย: {profile?.name}</h2>
-                        <p className="text-sm">โรคประจำตัว: {profile?.diseases?.join(', ')}</p>
+                        <div className="text-sm mt-2">
+                            <p>อายุ: {profile?.age} | เลือด: {profile?.bloodType}</p>
+                            <p>โรคประจำตัว: {profile?.diseases?.join(', ')}</p>
+                            <p className="text-red-600">แพ้ยา: {profile?.allergies}</p>
+                        </div>
                     </div>
-                    {/* Simplified Doctor Summary content */}
-                    <button onClick={() => window.print()} className="w-full bg-indigo-600 text-white p-3 rounded-xl mt-4">พิมพ์รายงาน</button>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="bg-pink-50 p-3 rounded-xl border border-pink-100 text-center"><p className="text-xs text-pink-500">ความดันเฉลี่ย</p><p className="font-bold text-lg">{calculateAverage(healthLogs.filter(l=>l.type==='bp'), 'sys')}/{calculateAverage(healthLogs.filter(l=>l.type==='bp'), 'dia')}</p></div>
+                        <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-center"><p className="text-xs text-emerald-500">น้ำตาลเฉลี่ย</p><p className="font-bold text-lg">{calculateAverage(healthLogs.filter(l=>l.type==='sugar'), 'sugar')}</p></div>
+                    </div>
+                    <h3 className="font-bold mb-2">รายการยาปัจจุบัน</h3>
+                    <ul className="list-disc pl-5 text-sm space-y-1 mb-6">{meds.map(m => <li key={m.id}>{m.name} ({m.dose}) - {m.time}</li>)}</ul>
+                    <button onClick={() => window.print()} className="w-full bg-indigo-600 text-white p-3 rounded-xl mt-auto flex justify-center gap-2"><Printer/> พิมพ์รายงาน</button>
                 </div>
             )}
             
+            {/* Input Modal */}
             {showInputModal && (
                 <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl">
@@ -383,56 +339,30 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                             ))}
                         </div>
                         <div className="space-y-4 mb-6">
-                            {inputType === 'bp' && <div className="flex gap-4"><input type="number" placeholder="บน (120)" className="w-full p-3 border rounded-xl" onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/><input type="number" placeholder="ล่าง (80)" className="w-full p-3 border rounded-xl" onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/></div>}
-                            {inputType === 'sugar' && <input type="number" placeholder="น้ำตาล (mg/dL)" className="w-full p-3 border rounded-xl" onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>}
-                            {/* ... other inputs ... */}
+                            {inputType === 'bp' && <div className="flex gap-4"><input type="number" placeholder="บน (120)" className="w-full p-3 border rounded-xl text-center text-2xl" onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/><input type="number" placeholder="ล่าง (80)" className="w-full p-3 border rounded-xl text-center text-2xl" onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/></div>}
+                            {inputType === 'sugar' && <input type="number" placeholder="น้ำตาล (mg/dL)" className="w-full p-3 border rounded-xl text-center text-2xl" onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>}
+                            {inputType === 'weight' && <input type="number" placeholder="น้ำหนัก (kg)" className="w-full p-3 border rounded-xl text-center text-2xl" onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>}
+                            {inputType === 'lab' && <div className="space-y-2"><input type="number" placeholder="HbA1c" className="w-full p-3 border rounded-xl" onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/><input type="number" placeholder="Cholesterol" className="w-full p-3 border rounded-xl" onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/></div>}
                         </div>
                         <div className="flex gap-3"><button onClick={() => setShowInputModal(false)} className="flex-1 py-3 rounded-xl bg-gray-100">ยกเลิก</button><button onClick={handleAddHealth} className="flex-1 py-3 rounded-xl bg-blue-600 text-white">บันทึก</button></div>
                     </div>
                 </div>
             )}
             
-            {/* Delete Modal */}
-            {deleteConfirm.isOpen && (
-                <div className="absolute inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-xs p-6 rounded-2xl text-center shadow-2xl">
-                        <h3 className="font-bold text-lg mb-2">ลบรายการนี้?</h3>
-                        <p className="text-sm text-gray-500 mb-4">"{deleteConfirm.title}"</p>
-                        <div className="flex gap-3"><button onClick={() => setDeleteConfirm({...deleteConfirm, isOpen: false})} className="flex-1 py-2 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={confirmDeleteAction} className="flex-1 py-2 bg-red-500 text-white rounded-xl">ลบ</button></div>
-                    </div>
-                </div>
-            )}
+            {/* Delete Confirmation */}
+            {deleteConfirm.isOpen && <div className="absolute inset-0 bg-black/60 z-[60] flex items-center justify-center p-4"><div className="bg-white w-full max-w-xs p-6 rounded-2xl text-center shadow-2xl"><h3 className="font-bold text-lg mb-2">ลบรายการนี้?</h3><p className="text-sm text-gray-500 mb-4">"{deleteConfirm.title}"</p><div className="flex gap-3"><button onClick={() => setDeleteConfirm({...deleteConfirm, isOpen: false})} className="flex-1 py-2 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={confirmDeleteAction} className="flex-1 py-2 bg-red-500 text-white rounded-xl">ลบ</button></div></div></div>}
             
-            {/* Edit Profile, Med Modal, Appt Modal - Implemented similarly to InputModal but using editId logic */}
-            {showMedModal && (
-                <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white p-6 rounded-3xl w-full max-w-sm">
-                        <h3 className="font-bold mb-4">{editMedId ? 'แก้ไขยา' : 'เพิ่มยา'}</h3>
-                        <input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="ชื่อยา" value={formMed.name || ''} onChange={e => setFormMed({...formMed, name: e.target.value})}/>
-                        <div className="flex gap-3"><button onClick={() => setShowMedModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleSaveMed} className="flex-1 py-3 bg-blue-600 text-white rounded-xl">บันทึก</button></div>
-                    </div>
-                </div>
-            )}
-            {showApptModal && (
-                <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white p-6 rounded-3xl w-full max-w-sm">
-                        <h3 className="font-bold mb-4">{editApptId ? 'แก้ไขนัด' : 'เพิ่มนัด'}</h3>
-                        <input type="date" className="w-full p-3 mb-3 bg-gray-50 rounded-xl" value={formAppt.date || ''} onChange={e => setFormAppt({...formAppt, date: e.target.value})}/>
-                        <input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="สถานที่" value={formAppt.location || ''} onChange={e => setFormAppt({...formAppt, location: e.target.value})}/>
-                        <div className="flex gap-3"><button onClick={() => setShowApptModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleSaveAppt} className="flex-1 py-3 bg-orange-500 text-white rounded-xl">บันทึก</button></div>
-                    </div>
-                </div>
-            )}
+            {/* Edit/Add Med Modal */}
+            {showMedModal && <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white p-6 rounded-3xl w-full max-w-sm"><h3 className="font-bold mb-4">{editMedId ? 'แก้ไขยา' : 'เพิ่มยา'}</h3><input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="ชื่อยา" value={formMed.name || ''} onChange={e => setFormMed({...formMed, name: e.target.value})}/><input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="ขนาด (เช่น 1 เม็ด)" value={formMed.dose || ''} onChange={e => setFormMed({...formMed, dose: e.target.value})}/><select className="w-full mb-4 p-3 bg-gray-50 rounded-xl" value={formMed.time} onChange={e => setFormMed({...formMed, time: e.target.value})}><option>หลังอาหารเช้า</option><option>หลังอาหารเย็น</option><option>ก่อนนอน</option></select><div className="flex gap-3"><button onClick={() => setShowMedModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleSaveMed} className="flex-1 py-3 bg-blue-600 text-white rounded-xl">บันทึก</button></div></div></div>}
             
-            {showEditProfile && (
-                <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white p-6 rounded-3xl w-full max-w-sm">
-                        <h3 className="font-bold mb-4">แก้ไขข้อมูลส่วนตัว</h3>
-                        <input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="ชื่อ" value={formProfile.name || ''} onChange={e => setFormProfile({...formProfile, name: e.target.value})}/>
-                        <div className="flex gap-3"><button onClick={() => setShowEditProfile(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleUpdateProfile} className="flex-1 py-3 bg-blue-600 text-white rounded-xl">บันทึก</button></div>
-                    </div>
-                </div>
-            )}
+            {/* Edit/Add Family Modal */}
+            {showFamilyModal && <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white p-6 rounded-3xl w-full max-w-sm"><h3 className="font-bold mb-4">{editFamilyId ? 'แก้ไขคน' : 'เพิ่มลูกหลาน'}</h3><input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="ชื่อ" value={formFamily.name || ''} onChange={e => setFormFamily({...formFamily, name: e.target.value})}/><input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="เบอร์โทร" value={formFamily.phone || ''} onChange={e => setFormFamily({...formFamily, phone: e.target.value})}/><select className="w-full mb-4 p-3 bg-gray-50 rounded-xl" value={formFamily.relation} onChange={e => setFormFamily({...formFamily, relation: e.target.value})}><option>ลูก</option><option>หลาน</option><option>ผู้ดูแล</option></select><div className="flex gap-3"><button onClick={() => setShowFamilyModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleSaveFamily} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl">บันทึก</button></div></div></div>}
+            
+            {/* Appt Modal */}
+            {showApptModal && <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white p-6 rounded-3xl w-full max-w-sm"><h3 className="font-bold mb-4">{editApptId ? 'แก้ไขนัด' : 'เพิ่มนัด'}</h3><input type="date" className="w-full p-3 mb-3 bg-gray-50 rounded-xl" value={formAppt.date || ''} onChange={e => setFormAppt({...formAppt, date: e.target.value})}/><input className="w-full p-3 mb-3 bg-gray-50 rounded-xl" placeholder="สถานที่" value={formAppt.location || ''} onChange={e => setFormAppt({...formAppt, location: e.target.value})}/><div className="flex gap-3"><button onClick={() => setShowApptModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleSaveAppt} className="flex-1 py-3 bg-orange-500 text-white rounded-xl">บันทึก</button></div></div></div>}
+            
+            {/* Edit Profile Modal */}
+            {showEditProfile && <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4"><div className="bg-white p-6 rounded-3xl w-full max-w-sm max-h-[80vh] overflow-y-auto"><h3 className="font-bold mb-4">แก้ไขข้อมูลส่วนตัว</h3><div className="space-y-3"><input className="w-full p-3 bg-gray-50 rounded-xl" placeholder="ชื่อ" value={formProfile.name || ''} onChange={e => setFormProfile({...formProfile, name: e.target.value})}/><input type="number" className="w-full p-3 bg-gray-50 rounded-xl" placeholder="อายุ" value={formProfile.age || ''} onChange={e => setFormProfile({...formProfile, age: e.target.value})}/><input className="w-full p-3 bg-gray-50 rounded-xl" placeholder="โรคประจำตัว (คั่นด้วยคอมม่า)" value={Array.isArray(formProfile.diseases) ? formProfile.diseases.join(',') : formProfile.diseases || ''} onChange={e => setFormProfile({...formProfile, diseases: e.target.value.split(',')})}/><input className="w-full p-3 bg-gray-50 rounded-xl" placeholder="แพ้ยา" value={formProfile.allergies || ''} onChange={e => setFormProfile({...formProfile, allergies: e.target.value})}/></div><div className="flex gap-3 mt-4"><button onClick={() => setShowEditProfile(false)} className="flex-1 py-3 bg-gray-100 rounded-xl">ยกเลิก</button><button onClick={handleUpdateProfile} className="flex-1 py-3 bg-blue-600 text-white rounded-xl">บันทึก</button></div></div></div>}
         </div>
     );
 };
@@ -444,7 +374,7 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
     const [showAddModal, setShowAddModal] = useState(false);
 
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'watching'), (snap) => {
+        const unsub = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching'), (snap) => {
             setPatients(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
         });
         return () => unsub();
@@ -452,19 +382,27 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
 
     const handleAddPatient = async () => {
         if(addId.length !== 6) return;
+        const q = query(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), orderBy('createdAt')); // Simulated query - in real app, we need exact match.
+        // Direct Query for specific Smart ID
+        // Note: This requires a separate public collection mapping SmartID -> UID
+        // For this Prototype, we will use a workaround:
+        // We will scan a known public collection `smart_ids`
         
-        // 1. Find UID from Public Smart ID Mapping
-        const publicIdRef = doc(db, 'artifacts', appId, 'public', 'smart_ids', addId);
-        const publicIdSnap = await getDoc(publicIdRef);
-        
-        if (publicIdSnap.exists()) {
-            const targetUid = publicIdSnap.data().uid;
+        // 1. Find User by Smart ID
+        const publicIdsRef = collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids');
+        const qSmart = query(publicIdsRef, where("smartId", "==", addId));
+        const querySnapshot = await getDocs(qSmart);
+
+        if (!querySnapshot.empty) {
+            const targetDoc = querySnapshot.docs[0];
+            const targetUid = targetDoc.data().uid;
+            
             // 2. Fetch Profile Name
-            const profileSnap = await getDoc(doc(db, 'artifacts', appId, 'users', targetUid, 'profile', 'main'));
+            const profileSnap = await getDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'));
             const patientName = profileSnap.exists() ? profileSnap.data().name : `คนไข้ (${addId})`;
 
             // 3. Add to Watch List
-            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'watching', targetUid), {
+            await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', targetUid), {
                 name: patientName,
                 addedAt: serverTimestamp()
             });
@@ -509,13 +447,13 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
-        // Check if existing auth persists, else wait for login
+        // Check auth persistence handled by firebase
     };
     init();
     return onAuthStateChanged(auth, async (u) => { 
         setUser(u); 
         if(u) {
-            const snap = await getDoc(doc(db, 'artifacts', appId, 'users', u.uid));
+            const snap = await getDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', u.uid));
             if(snap.exists() && snap.data().role) setRole(snap.data().role);
         }
         setLoading(false); 
@@ -529,11 +467,11 @@ export default function App() {
       if(selectedRole === 'patient') {
           const shortId = generateSmartId();
           userData.shortId = shortId;
-          await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), { name: "ผู้สูงอายุ", shortId }, { merge: true });
-          // Public Mapping for ID lookup
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'smart_ids', shortId), { uid: user.uid });
+          await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'profile', 'main'), { name: "ผู้สูงอายุ", shortId }, { merge: true });
+          // Public Mapping for ID lookup (Using a random ID as doc ID to prevent hotspots, but store shortId as field)
+          await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), { smartId: shortId, uid: user.uid, createdAt: serverTimestamp() });
       }
-      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid), userData, { merge: true });
+      await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid), userData, { merge: true });
       setRole(selectedRole);
   };
 
