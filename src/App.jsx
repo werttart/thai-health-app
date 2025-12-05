@@ -1,16 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
   Heart, Pill, Activity, User, Plus, Phone, AlertCircle,
-  Home, MessageCircle, FileText, Shield, Stethoscope, 
-  Send, QrCode, MapPin, Loader2, Scale, Droplet,
-  Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
-  Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
-  XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History,
-  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown, Share, Navigation, TestTube,
-  FileDigit, List
+  Home, Clock, Trash2, ChevronLeft, ChevronRight,
+  Share2, Check, Edit2, AlertTriangle, LogOut, Mail, Lock, Lightbulb,
+  XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, History,
+  Infinity as InfinityIcon, ChevronDown, TestTube,
+  Scale, Droplet, List, FileText, Navigation, Shield, Calendar as CalendarIcon, Loader2, QrCode
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -21,7 +19,8 @@ import {
   serverTimestamp, setDoc, deleteDoc, query, orderBy, getDoc, where, getDocs, limit 
 } from 'firebase/firestore';
 
-// --- 1. การตั้งค่า Firebase (แก้ไขให้ถูกต้องตามระบบ) ---
+// --- 1. การตั้งค่า Firebase ---
+// ใช้การเช็คแบบปลอดภัยสำหรับ Environment ของเว็บแอพ
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
   apiKey: "AIzaSyBILcG2lnb_dhsENlPtYboFrGj_gP3D3d8",
   authDomain: "thaihealth-fcd28.firebaseapp.com",
@@ -39,7 +38,7 @@ const db = getFirestore(app);
 
 const APP_COLLECTION = "thai-health-production-v2-pro"; 
 
-// --- Helpers & Utilities ---
+// --- Helpers ---
 const getTodayStr = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -57,17 +56,28 @@ const getPast7Days = () => {
 
 const formatDateThai = (dateStr) => {
     if(!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+    try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+    } catch(e) { return dateStr; }
 };
 
 const formatFullDateThai = (date) => {
-    return date.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    try {
+        return date.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    } catch(e) { return ''; }
 };
 
 const generateSmartId = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-// Logic การประเมินสุขภาพ (Smart Health Analysis)
+// Helper to safely render text (prevents Object error)
+const safeText = (text) => {
+    if (typeof text === 'object' && text !== null) return JSON.stringify(text); // Fallback for objects
+    if (text === null || text === undefined) return '';
+    return String(text);
+};
+
+// Logic การประเมินสุขภาพ
 const analyzeBP = (sys, dia) => {
     if (!sys || !dia) return { label: 'รอข้อมูล', color: 'text-slate-400', bg: 'bg-slate-50', icon: Activity };
     const s = Number(sys);
@@ -109,7 +119,7 @@ const groupMedsByPeriod = (meds) => {
     return groups;
 };
 
-// --- Styles Injection for Font ---
+// --- Styles ---
 const FontStyles = () => (
     <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
@@ -124,13 +134,12 @@ const FontStyles = () => (
 );
 
 // --- Components ---
-
 const Toast = ({ message, type, onClose }) => {
     useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
     return (
         <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-6 py-4 rounded-full shadow-2xl transition-all animate-fade-in-down ${type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-600 text-white'}`}>
             {type === 'error' ? <XCircle size={24}/> : <CheckCircle size={24}/>}
-            <span className="font-medium text-base">{message}</span>
+            <span className="font-medium text-base">{safeText(message)}</span>
         </div>
     );
 };
@@ -155,15 +164,15 @@ const StatCard = ({ title, value, unit, icon: Icon, colorClass, onClick, analysi
         </div>
         {analysis && (
             <span className={`text-[10px] font-bold px-2 py-1 rounded-full bg-white/80 backdrop-blur-sm border border-white/50 ${analysis.color}`}>
-                {analysis.label}
+                {safeText(analysis.label)}
             </span>
         )}
     </div>
     <div className="flex flex-col">
-        <span className="text-slate-500 font-medium text-xs uppercase tracking-wide mb-1 opacity-80">{title}</span>
+        <span className="text-slate-500 font-medium text-xs uppercase tracking-wide mb-1 opacity-80">{safeText(title)}</span>
         <div className="flex items-baseline gap-1">
-            <span className="font-bold text-slate-800 text-xl md:text-2xl">{value || '-'}</span>
-            <span className="text-slate-500 text-[10px] font-medium">{unit}</span>
+            <span className="font-bold text-slate-800 text-xl md:text-2xl">{safeText(value)}</span>
+            <span className="text-slate-500 text-[10px] font-medium">{safeText(unit)}</span>
         </div>
     </div>
   </div>
@@ -181,7 +190,7 @@ const MedicineGroup = ({ title, icon: Icon, meds, medHistory, toggleMed, canEdit
                         <div key={med.id} onClick={() => canEdit && toggleMed(med.id)} className={`flex items-center justify-between p-4 rounded-3xl border transition-all duration-300 cursor-pointer ${isTaken ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100 shadow-sm hover:shadow-md'}`}>
                             <div className="flex items-center gap-4 flex-1">
                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isTaken ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}><Pill size={24}/></div>
-                                <div><h4 className={`font-bold text-lg ${isTaken ? 'text-emerald-800 line-through opacity-70' : 'text-slate-700'}`}>{med.name}</h4><p className="text-xs text-slate-400">{med.dose || '1 หน่วย'} • {med.detail || 'ก่อนอาหาร'}</p></div>
+                                <div><h4 className={`font-bold text-lg ${isTaken ? 'text-emerald-800 line-through opacity-70' : 'text-slate-700'}`}>{safeText(med.name)}</h4><p className="text-xs text-slate-400">{safeText(med.dose)} • {safeText(med.detail)}</p></div>
                             </div>
                             <div className="flex items-center gap-3">
                                 <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isTaken ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'}`}>{isTaken && <Check size={16} className="text-white" strokeWidth={4}/>}</div>
@@ -200,7 +209,7 @@ const MedicineGroup = ({ title, icon: Icon, meds, medHistory, toggleMed, canEdit
     );
 };
 
-// --- Patient Card Component for Caregiver ---
+// --- Patient Card ---
 const PatientCard = ({ patientUid, info, onClick, onUnlink }) => {
     const [latestLog, setLatestLog] = useState(null);
     const [profile, setProfile] = useState(null);
@@ -223,10 +232,10 @@ const PatientCard = ({ patientUid, info, onClick, onUnlink }) => {
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4">
                     <div className={`w-14 h-14 rounded-[24px] flex items-center justify-center text-white font-bold text-2xl shadow-lg ${isDanger ? 'bg-red-500' : 'bg-gradient-to-br from-emerald-400 to-teal-500'}`}>
-                        {profile?.name ? profile.name.charAt(0) : (info?.name?.charAt(0) || '?')}
+                        {profile?.name ? safeText(profile.name.charAt(0)) : (info?.name?.charAt(0) || '?')}
                     </div>
                     <div>
-                        <h3 className="font-bold text-xl text-slate-800 group-hover:text-emerald-600 transition-colors">{profile?.name || info.name}</h3>
+                        <h3 className="font-bold text-xl text-slate-800 group-hover:text-emerald-600 transition-colors">{safeText(profile?.name || info.name)}</h3>
                         <p className="text-sm text-slate-400">
                             {profile?.age ? `อายุ ${profile.age} ปี` : ''} 
                             {profile?.diseases ? ` • ${profile.diseases}` : ''}
@@ -236,7 +245,7 @@ const PatientCard = ({ patientUid, info, onClick, onUnlink }) => {
                 <button onClick={(e) => { e.stopPropagation(); onUnlink(); }} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"><Trash2 size={20}/></button>
             </div>
             
-            {/* Real-time Vitals Preview */}
+            {/* Real-time Vitals */}
             <div className="flex gap-2">
                 <div className={`flex-1 p-3 rounded-2xl ${isDanger ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-600'}`}>
                     <div className="flex items-center gap-2 mb-1">
@@ -304,7 +313,7 @@ const AuthScreen = () => {
                             <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full pl-14 p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all font-medium text-slate-700" placeholder="••••••••" />
                         </div>
                     </div>
-                    {error && <div className="bg-red-50 text-red-500 text-xs p-4 rounded-2xl flex items-center gap-2"><AlertTriangle size={16}/> {error}</div>}
+                    {error && <div className="bg-red-50 text-red-500 text-xs p-4 rounded-2xl flex items-center gap-2"><AlertTriangle size={16}/> {safeText(error)}</div>}
                     <button type="submit" disabled={loading} className="w-full bg-emerald-600 text-white p-4 rounded-2xl font-bold text-lg shadow-lg shadow-emerald-200 hover:bg-emerald-700 active:scale-[0.98] transition-all flex justify-center items-center mt-4">
                         {loading ? <Loader2 className="animate-spin"/> : (isRegister ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ')}
                     </button>
@@ -325,7 +334,6 @@ const RoleSelector = ({ onSelect, isProcessing }) => (
         <div className="bg-white p-8 rounded-[40px] w-full max-w-sm shadow-xl text-center">
             <h1 className="text-3xl font-bold text-slate-800 mb-2">เลือกสถานะ</h1>
             <p className="text-slate-500 mb-8">เพื่อให้ระบบทำงานได้เหมาะสมกับคุณ</p>
-            
             {isProcessing ? (
                  <div className="py-10"><Loader2 className="animate-spin text-emerald-600 mx-auto" size={48} /><p className="mt-4 text-slate-400">กำลังตั้งค่าระบบ...</p></div>
             ) : (
@@ -333,27 +341,19 @@ const RoleSelector = ({ onSelect, isProcessing }) => (
                     <button onClick={() => onSelect('patient')} className="w-full p-1 rounded-[32px] border-2 border-emerald-100 hover:border-emerald-500 transition-all group bg-white hover:bg-emerald-50">
                         <div className="p-6 flex items-center gap-4">
                             <div className="bg-emerald-100 p-4 rounded-full text-emerald-600 group-hover:scale-110 transition-transform"><User size={32}/></div>
-                            <div className="text-left">
-                                <h3 className="font-bold text-xl text-slate-800">ผู้ใช้งานทั่วไป</h3>
-                                <p className="text-xs text-slate-400">ผู้สูงอายุ / ผู้ดูแลสุขภาพตนเอง</p>
-                            </div>
+                            <div className="text-left"><h3 className="font-bold text-xl text-slate-800">ผู้ใช้งานทั่วไป</h3><p className="text-xs text-slate-400">ผู้สูงอายุ / ผู้ดูแลสุขภาพตนเอง</p></div>
                         </div>
                     </button>
                     <button onClick={() => onSelect('caregiver')} className="w-full p-1 rounded-[32px] border-2 border-slate-100 hover:border-blue-500 transition-all group bg-white hover:bg-blue-50">
                         <div className="p-6 flex items-center gap-4">
                             <div className="bg-blue-100 p-4 rounded-full text-blue-600 group-hover:scale-110 transition-transform"><Users size={32}/></div>
-                            <div className="text-left">
-                                <h3 className="font-bold text-xl text-slate-800">ผู้ดูแล / ลูกหลาน</h3>
-                                <p className="text-xs text-slate-400">ติดตามและดูแลครอบครัว</p>
-                            </div>
+                            <div className="text-left"><h3 className="font-bold text-xl text-slate-800">ผู้ดูแล / ลูกหลาน</h3><p className="text-xs text-slate-400">ติดตามและดูแลครอบครัว</p></div>
                         </div>
                     </button>
                 </div>
             )}
              {!isProcessing && (
-                <button onClick={() => signOut(auth)} className="mt-8 text-slate-400 text-sm flex items-center justify-center gap-2 hover:text-red-500 transition-colors">
-                    <LogOut size={16}/> เปลี่ยนบัญชี
-                </button>
+                <button onClick={() => signOut(auth)} className="mt-8 text-slate-400 text-sm flex items-center justify-center gap-2 hover:text-red-500 transition-colors"><LogOut size={16}/> เปลี่ยนบัญชี</button>
             )}
         </div>
     </div>
@@ -372,26 +372,23 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [submitting, setSubmitting] = useState(false);
     const [gpsLocation, setGpsLocation] = useState(null);
     
-    // Stats Dashboard State
+    // Stats State
     const [selectedStat, setSelectedStat] = useState('bp');
 
     // UI State
     const [todayTip, setTodayTip] = useState(HEALTH_TIPS[0]);
     const [notification, setNotification] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, collection: null, id: null, title: '' });
-    const [showDetailDropdown, setShowDetailDropdown] = useState(false); // Dropdown State
+    const [showDetailDropdown, setShowDetailDropdown] = useState(false);
 
     // Forms
     const [showInputModal, setShowInputModal] = useState(false);
     const [formHealth, setFormHealth] = useState({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
     
-    // Med Form State (Expanded)
+    // Med Form
     const [showMedModal, setShowMedModal] = useState(false); 
     const [editMedId, setEditMedId] = useState(null); 
-    const [formMed, setFormMed] = useState({
-        name: '', dose: '', detail: 'หลังอาหาร', period: 'เช้า', 
-        isForever: true, startDate: getTodayStr(), endDate: ''
-    });
+    const [formMed, setFormMed] = useState({ name: '', dose: '', detail: 'หลังอาหาร', period: 'เช้า', isForever: true, startDate: getTodayStr(), endDate: '' });
 
     const [showApptModal, setShowApptModal] = useState(false); const [editApptId, setEditApptId] = useState(null); const [formAppt, setFormAppt] = useState({});
     const [showFamilyModal, setShowFamilyModal] = useState(false); const [editFamilyId, setEditFamilyId] = useState(null); const [formFamily, setFormFamily] = useState({});
@@ -482,13 +479,35 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         window.open(`https://line.me/R/msg/text/?${encodeURIComponent(message)}`, '_blank');
     };
 
+    const fetchLocation = () => { 
+        if (navigator.geolocation) { 
+            navigator.geolocation.getCurrentPosition(
+                (p) => setGpsLocation(`${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`),
+                (err) => { console.error(err); showToast("ไม่สามารถดึงพิกัดได้ กรุณาเปิด GPS", 'error'); }
+            ); 
+        } else setGpsLocation("อุปกรณ์ไม่รองรับ"); 
+    };
+
+    const handleSOS = () => {
+        if (!gpsLocation) {
+            alert("กรุณารอ GPS จับสัญญาณสักครู่ แล้วกดใหม่อีกครั้ง");
+            fetchLocation();
+            return;
+        }
+        const message = `🆘 ช่วยด้วย! ฉุกเฉิน! \nพิกัดของฉัน: https://maps.google.com/?q=${gpsLocation}`;
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(message)}`, '_blank');
+    };
+
+    // --- Render Logic ---
     const latestBP = healthLogs.filter(x => x.type === 'bp').pop();
     const latestSugar = healthLogs.filter(x => x.type === 'sugar').pop();
     const latestWeight = healthLogs.filter(x => x.type === 'weight').pop();
     const latestLab = healthLogs.filter(x => x.type === 'lab').pop();
+    
     const medGroups = groupMedsByPeriod(meds);
     const nextAppt = appointments.filter(a => new Date(a.date) >= new Date().setHours(0,0,0,0))[0];
     const past7Days = getPast7Days();
+
     const activeMedsToday = meds.filter(isMedActiveToday);
     const totalMeds = activeMedsToday.length;
     const takenMedsTodayCount = (medHistory[getTodayStr()]?.takenMeds || []).filter(id => activeMedsToday.some(m => m.id === id)).length;
@@ -505,7 +524,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             <div className="bg-white/90 backdrop-blur-md p-6 pt-10 sticky top-0 z-30 border-b border-slate-100 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                     {currentUserRole === 'caregiver' && <button onClick={onBack} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200"><ChevronLeft className="text-slate-600"/></button>}
-                    <div><h1 className="font-bold text-slate-800 text-xl">{profile?.name || 'สวัสดีครับ'}</h1><p className="text-slate-400 text-xs">{currentUserRole === 'caregiver' ? 'โหมดผู้ดูแล' : 'ขอให้สุขภาพแข็งแรงนะครับ'}</p></div>
+                    <div><h1 className="font-bold text-slate-800 text-xl">{safeText(profile?.name) || 'สวัสดีครับ'}</h1><p className="text-slate-400 text-xs">{currentUserRole === 'caregiver' ? 'โหมดผู้ดูแล' : 'ขอให้สุขภาพแข็งแรงนะครับ'}</p></div>
                 </div>
                 <div className="flex gap-2">
                     {canEdit && <div onClick={() => setActiveTab('profile')} className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 cursor-pointer border-2 border-white shadow-sm"><User size={20}/></div>}
@@ -535,7 +554,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                     <span className="text-xs font-bold uppercase">{new Date(nextAppt.date).toLocaleString('th-TH', { month: 'short' })}</span>
                                     <span className="text-2xl font-bold">{new Date(nextAppt.date).getDate()}</span>
                                 </div>
-                                <div><p className="text-xs text-orange-500 font-bold uppercase mb-1">นัดหมายเร็วๆ นี้</p><h3 className="font-bold text-slate-800">{nextAppt.location}</h3><p className="text-sm text-slate-400">{nextAppt.time} น. • {nextAppt.dept || 'ตรวจทั่วไป'}</p></div>
+                                <div><p className="text-xs text-orange-500 font-bold uppercase mb-1">นัดหมายเร็วๆ นี้</p><h3 className="font-bold text-slate-800">{safeText(nextAppt.location)}</h3><p className="text-sm text-slate-400">{safeText(nextAppt.time)} น. • {safeText(nextAppt.dept) || 'ตรวจทั่วไป'}</p></div>
                             </div>
                         )}
                         <div>
@@ -576,9 +595,9 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                                 <div className="flex gap-4">
                                                     <div className={`flex flex-col items-center justify-center p-3 rounded-2xl min-w-[70px] h-[80px] ${isPast ? 'bg-slate-200 text-slate-500' : 'bg-orange-50 text-orange-600'}`}><span className="text-xs font-bold uppercase">{new Date(a.date).toLocaleString('th-TH', { month: 'short' })}</span><span className="text-2xl font-bold">{new Date(a.date).getDate()}</span></div>
                                                     <div className="flex-1">
-                                                        <div className="flex justify-between items-start"><h3 className="font-bold text-lg text-slate-800">{a.location}</h3>{canEdit && (<div className="flex gap-2"><button onClick={() => { setFormAppt(a); setEditApptId(a.id); setShowApptModal(true); }}><Edit2 size={16} className="text-slate-300 hover:text-emerald-500"/></button><button onClick={() => setDeleteConfirm({isOpen:true, collection:'appointments', id:a.id, title:'นัดหมาย'})}><Trash2 size={16} className="text-slate-300 hover:text-red-500"/></button></div>)}</div>
-                                                        <p className="text-slate-500 text-sm mb-2">{a.dept}</p>
-                                                        <div className="flex flex-wrap gap-2 text-xs font-medium"><span className="bg-slate-100 px-2 py-1 rounded-lg text-slate-500 flex items-center gap-1"><Clock size={12}/> {a.time} น.</span>{a.doctor && <span className="bg-blue-50 px-2 py-1 rounded-lg text-blue-600 flex items-center gap-1"><Stethoscope size={12}/> {a.doctor}</span>}</div>
+                                                        <div className="flex justify-between items-start"><h3 className="font-bold text-lg text-slate-800">{safeText(a.location)}</h3>{canEdit && (<div className="flex gap-2"><button onClick={() => { setFormAppt(a); setEditApptId(a.id); setShowApptModal(true); }}><Edit2 size={16} className="text-slate-300 hover:text-emerald-500"/></button><button onClick={() => setDeleteConfirm({isOpen:true, collection:'appointments', id:a.id, title:'นัดหมาย'})}><Trash2 size={16} className="text-slate-300 hover:text-red-500"/></button></div>)}</div>
+                                                        <p className="text-slate-500 text-sm mb-2">{safeText(a.dept)}</p>
+                                                        <div className="flex flex-wrap gap-2 text-xs font-medium"><span className="bg-slate-100 px-2 py-1 rounded-lg text-slate-500 flex items-center gap-1"><Clock size={12}/> {safeText(a.time)} น.</span>{a.doctor && <span className="bg-blue-50 px-2 py-1 rounded-lg text-blue-600 flex items-center gap-1"><Stethoscope size={12}/> {safeText(a.doctor)}</span>}</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -658,13 +677,13 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                         <div className="flex justify-between items-start mb-1">
                                             <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{formatDateThai(log.dateStr)}</span>
                                             <span className="font-bold text-slate-700 text-lg">
-                                                {selectedStat === 'bp' && `${log.sys}/${log.dia}`}
-                                                {selectedStat === 'sugar' && log.sugar}
-                                                {selectedStat === 'weight' && log.weight}
-                                                {selectedStat === 'lab' && `A1c: ${log.hba1c || '-'} / LDL: ${log.lipid || '-'}`}
+                                                {selectedStat === 'bp' && `${safeText(log.sys)}/${safeText(log.dia)}`}
+                                                {selectedStat === 'sugar' && safeText(log.sugar)}
+                                                {selectedStat === 'weight' && safeText(log.weight)}
+                                                {selectedStat === 'lab' && `A1c: ${safeText(log.hba1c) || '-'} / LDL: ${safeText(log.lipid) || '-'}`}
                                             </span>
                                         </div>
-                                        {log.note && (<div className="text-xs text-slate-500 bg-orange-50 p-2 rounded-lg mt-1 flex gap-2 items-start"><FileText size={12} className="mt-0.5 text-orange-400 shrink-0"/>{log.note}</div>)}
+                                        {log.note && (<div className="text-xs text-slate-500 bg-orange-50 p-2 rounded-lg mt-1 flex gap-2 items-start"><FileText size={12} className="mt-0.5 text-orange-400 shrink-0"/>{safeText(log.note)}</div>)}
                                     </div>
                                 ))}
                                 {healthLogs.filter(l => l.type === selectedStat || (selectedStat === 'lab' && l.type === 'lab')).length === 0 && (<p className="text-center text-slate-300 text-sm py-4">ยังไม่มีข้อมูล</p>)}
@@ -829,28 +848,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                 </div>
             )}
             
-            {showApptModal && (
-                <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl">
-                        <h3 className="font-bold text-xl text-center mb-6">{editApptId ? 'แก้ไขนัด' : 'เพิ่มนัดหมอ'}</h3>
-                        <div className="space-y-3 mb-6">
-                            <label className="text-xs font-bold text-slate-400 ml-2">วันที่ & เวลา</label>
-                            <div className="flex gap-2">
-                                <input type="date" className="flex-1 p-3 bg-slate-50 rounded-2xl outline-none" value={formAppt.date || ''} onChange={e => setFormAppt({...formAppt, date: e.target.value})}/>
-                                <input type="time" className="w-24 p-3 bg-slate-50 rounded-2xl outline-none" value={formAppt.time || ''} onChange={e => setFormAppt({...formAppt, time: e.target.value})}/>
-                            </div>
-                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" placeholder="โรงพยาบาล / สถานที่" value={formAppt.location || ''} onChange={e => setFormAppt({...formAppt, location: e.target.value})}/>
-                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" placeholder="แผนก / คลินิก" value={formAppt.dept || ''} onChange={e => setFormAppt({...formAppt, dept: e.target.value})}/>
-                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" placeholder="ชื่อแพทย์ (ถ้ามี)" value={formAppt.doctor || ''} onChange={e => setFormAppt({...formAppt, doctor: e.target.value})}/>
-                        </div>
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowApptModal(false)} className="flex-1 py-3 bg-slate-100 text-slate-500 rounded-2xl font-bold">ยกเลิก</button>
-                            <button onClick={() => handleSave(async () => { const c = collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'appointments'); if(editApptId) await updateDoc(doc(c, editApptId), formAppt); else await addDoc(c, formAppt); setShowApptModal(false); })} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg">บันทึก</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
             {showFamilyModal && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl">
@@ -967,7 +964,7 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
                             <p className="text-xs text-slate-500">กรอกรหัส Smart ID 6 หลัก</p>
                         </div>
                         <input value={addId} onChange={e => setAddId(e.target.value)} className="w-full text-center text-4xl font-bold p-5 bg-slate-50 rounded-2xl mb-4 tracking-[0.2em] border-2 border-transparent focus:border-emerald-500 outline-none transition-all text-slate-800" placeholder="000000" maxLength={6} autoFocus/>
-                        {errorMsg && <p className="text-red-500 text-xs text-center mb-4">{errorMsg}</p>}
+                        {errorMsg && <p className="text-red-500 text-xs text-center mb-4">{safeText(errorMsg)}</p>}
                         <div className="flex gap-3">
                             <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 bg-slate-100 rounded-2xl font-bold text-slate-500">ยกเลิก</button>
                             <button onClick={handleAddPatient} disabled={adding} className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg">{adding ? <Loader2 className="animate-spin mx-auto"/> : 'เชื่อมต่อ'}</button>
