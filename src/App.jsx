@@ -8,7 +8,8 @@ import {
   Send, QrCode, MapPin, Loader2, Scale, Droplet,
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
   Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
-  XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History
+  XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History,
+  CalendarDays, CalendarRange, Infinity as InfinityIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -73,6 +74,16 @@ const calculateAverage = (data, key) => {
     return Math.round(sum / validData.length);
 };
 
+// ตรวจสอบว่ายาต้องกินวันนี้ไหม (ตาม Start/End Date)
+const isMedActiveToday = (med) => {
+    const today = getTodayStr();
+    // ถ้ามี StartDate และวันนี้ยังไม่ถึง -> ไม่แสดง
+    if (med.startDate && today < med.startDate) return false;
+    // ถ้าไม่ใช่กินตลอดไป และมี EndDate และวันนี้เลยกำหนดแล้ว -> ไม่แสดง
+    if (!med.isForever && med.endDate && today > med.endDate) return false;
+    return true;
+};
+
 // จัดกลุ่มยาตามช่วงเวลา
 const groupMedsByPeriod = (meds) => {
     const groups = {
@@ -83,13 +94,14 @@ const groupMedsByPeriod = (meds) => {
         'อื่นๆ': []
     };
     
-    meds.forEach(med => {
-        // Normalize period check
+    // กรองยาที่ Active ก่อนจัดกลุ่ม
+    const activeMeds = meds.filter(isMedActiveToday);
+
+    activeMeds.forEach(med => {
         const p = med.period || 'อื่นๆ';
         if (groups[p]) {
             groups[p].push(med);
         } else {
-             // Fallback for old data or specific times
              if (med.time && med.time.includes('เช้า')) groups['เช้า'].push(med);
              else if (med.time && med.time.includes('เที่ยง')) groups['กลางวัน'].push(med);
              else if (med.time && med.time.includes('เย็น')) groups['เย็น'].push(med);
@@ -170,7 +182,6 @@ const StatCard = ({ title, value, unit, icon: Icon, colorClass, onClick, statusT
             <span className="text-slate-400 text-xs">{unit}</span>
         </div>
     </div>
-    {/* Health Status Indicator */}
     {statusType && rawValue && (
           <div className={`absolute top-4 right-4 w-2.5 h-2.5 rounded-full ring-4 ring-slate-50
             ${(statusType === 'sys' && rawValue > 140) || (statusType === 'sugar' && rawValue > 125) 
@@ -192,9 +203,7 @@ const MedicineGroup = ({ title, icon: Icon, meds, medHistory, toggleMed, canEdit
             </div>
             <div className="space-y-3">
                 {meds.map(med => {
-                    // FIX: Access the specific date log from medHistory
                     const isTaken = (medHistory[getTodayStr()]?.takenMeds || []).includes(med.id);
-                    
                     return (
                         <div key={med.id} onClick={() => canEdit && toggleMed(med.id)} className={`flex items-center justify-between p-4 rounded-3xl border transition-all duration-300 cursor-pointer ${isTaken ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100 shadow-sm hover:shadow-md'}`}>
                             <div className="flex items-center gap-4 flex-1">
@@ -207,7 +216,6 @@ const MedicineGroup = ({ title, icon: Icon, meds, medHistory, toggleMed, canEdit
                                 </div>
                             </div>
                             
-                            {/* Checklist Button */}
                             <div className="flex items-center gap-3">
                                 <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isTaken ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'}`}>
                                     {isTaken && <Check size={16} className="text-white" strokeWidth={4}/>}
@@ -354,7 +362,14 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [inputType, setInputType] = useState('bp');
     const [formHealth, setFormHealth] = useState({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '' });
     
-    const [showMedModal, setShowMedModal] = useState(false); const [editMedId, setEditMedId] = useState(null); const [formMed, setFormMed] = useState({period: 'เช้า'});
+    // Med Form State (Expanded)
+    const [showMedModal, setShowMedModal] = useState(false); 
+    const [editMedId, setEditMedId] = useState(null); 
+    const [formMed, setFormMed] = useState({
+        name: '', dose: '', detail: 'หลังอาหาร', period: 'เช้า', 
+        isForever: true, startDate: getTodayStr(), endDate: ''
+    });
+
     const [showApptModal, setShowApptModal] = useState(false); const [editApptId, setEditApptId] = useState(null); const [formAppt, setFormAppt] = useState({});
     const [showFamilyModal, setShowFamilyModal] = useState(false); const [editFamilyId, setEditFamilyId] = useState(null); const [formFamily, setFormFamily] = useState({});
     const [showEditProfile, setShowEditProfile] = useState(false); const [formProfile, setFormProfile] = useState({});
@@ -374,7 +389,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), async (s) => { 
             if(s.exists()) { 
                 const data = s.data(); setProfile(data); setFormProfile(data); 
-                // Ensure Public ID
                 if (currentUserRole === 'patient' && data.shortId) {
                    const q = query(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), where("smartId", "==", data.shortId));
                    const snap = await getDocs(q);
@@ -438,9 +452,10 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const nextAppt = appointments.filter(a => new Date(a.date) >= new Date().setHours(0,0,0,0))[0];
     const past7Days = getPast7Days();
 
-    // Summary of meds taken today
-    const totalMeds = meds.length;
-    const takenMedsTodayCount = (medHistory[getTodayStr()]?.takenMeds || []).length;
+    // Summary of meds taken today (Calculated from Active Meds)
+    const activeMedsToday = meds.filter(isMedActiveToday);
+    const totalMeds = activeMedsToday.length;
+    const takenMedsTodayCount = (medHistory[getTodayStr()]?.takenMeds || []).filter(id => activeMedsToday.some(m => m.id === id)).length;
     const progressPercent = totalMeds > 0 ? (takenMedsTodayCount / totalMeds) * 100 : 0;
 
     if (loading) return <div className="h-screen flex flex-col gap-4 items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-emerald-600" size={48}/><p className="text-slate-400 font-medium">กำลังโหลดข้อมูล...</p></div>;
@@ -478,7 +493,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                         </div>
                         
                         {/* Daily Progress */}
-                        {meds.length > 0 && (
+                        {totalMeds > 0 && (
                             <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="text-xs font-bold text-slate-500">ความคืบหน้าการกินยาวันนี้</span>
@@ -509,7 +524,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                         <div>
                             <div className="flex justify-between items-end mb-4 px-1">
                                 <h2 className="font-bold text-slate-700 text-xl flex items-center gap-2"><Pill className="text-emerald-500"/> ยาของฉัน</h2>
-                                {canEdit && <button onClick={() => { setFormMed({name:'', time:'', dose:'', period:'เช้า'}); setEditMedId(null); setShowMedModal(true); }} className="text-emerald-600 text-sm font-bold bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100">+ เพิ่มยา</button>}
+                                {canEdit && <button onClick={() => { setFormMed({name:'', dose:'', detail:'หลังอาหาร', period:'เช้า', isForever: true, startDate: getTodayStr(), endDate: ''}); setEditMedId(null); setShowMedModal(true); }} className="text-emerald-600 text-sm font-bold bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100">+ เพิ่มยา</button>}
                             </div>
                             
                             {meds.length === 0 ? (
@@ -579,28 +594,32 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                              )}
                         </div>
                         
-                        {/* History Section */}
+                        {/* History Section Redesign */}
                         <div className="mt-8">
                             <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><History className="text-indigo-500"/> ประวัติการกินยา (7 วัน)</h2>
-                            <div className="bg-white rounded-[32px] border border-slate-100 overflow-hidden shadow-sm">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 {past7Days.map((dateStr, index) => {
                                     const log = medHistory[dateStr];
                                     const count = log?.takenMeds?.length || 0;
-                                    const allTaken = totalMeds > 0 && count >= totalMeds;
+                                    // Use totalMeds (current) as a baseline, though technically history might differ.
+                                    // Ideally, we store "totalExpected" in logs, but for now use activeMedsToday as approx.
+                                    const percentage = totalMeds > 0 ? Math.round((count/totalMeds)*100) : 0;
                                     const isToday = dateStr === getTodayStr();
                                     
                                     return (
-                                        <div key={dateStr} className={`flex justify-between items-center p-4 ${index !== past7Days.length - 1 ? 'border-b border-slate-50' : ''} ${isToday ? 'bg-indigo-50/50' : ''}`}>
-                                            <div>
-                                                <p className="font-bold text-slate-700">{formatDateThai(dateStr)} {isToday && <span className="text-xs text-indigo-500 bg-indigo-100 px-2 py-0.5 rounded-full ml-1">วันนี้</span>}</p>
+                                        <div key={dateStr} className={`p-4 rounded-[24px] border relative overflow-hidden ${isToday ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white border-slate-100'}`}>
+                                            <div className="flex justify-between items-start relative z-10">
+                                                <div>
+                                                    <p className={`text-xs font-bold uppercase mb-1 ${isToday ? 'text-indigo-200' : 'text-slate-400'}`}>{new Date(dateStr).toLocaleDateString('th-TH', {weekday:'long'})}</p>
+                                                    <h3 className={`text-lg font-bold ${isToday ? 'text-white' : 'text-slate-800'}`}>{formatDateThai(dateStr)}</h3>
+                                                </div>
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${isToday ? 'bg-white text-indigo-600' : percentage === 100 ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                                                    {percentage}%
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="text-right">
-                                                    <p className={`text-sm font-bold ${allTaken ? 'text-emerald-600' : 'text-slate-600'}`}>{count} / {totalMeds} รายการ</p>
-                                                </div>
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${allTaken ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}>
-                                                    {allTaken ? <Check size={16}/> : <span className="text-xs font-bold">{Math.round((count/totalMeds)*100)}%</span>}
-                                                </div>
+                                            {/* Progress Bar Background */}
+                                            <div className={`absolute bottom-0 left-0 h-1.5 transition-all ${isToday ? 'bg-white/30' : 'bg-slate-100'}`} style={{width: '100%'}}>
+                                                <div className={`h-full ${isToday ? 'bg-white' : 'bg-emerald-500'}`} style={{width: `${percentage}%`}}></div>
                                             </div>
                                         </div>
                                     );
@@ -739,16 +758,49 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             
             {showMedModal && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl">
+                    <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
                         <h3 className="font-bold text-xl text-center mb-6">{editMedId ? 'แก้ไขยา' : 'เพิ่มยาใหม่'}</h3>
-                        <div className="space-y-3 mb-6">
+                        <div className="space-y-4 mb-6">
                             <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500" placeholder="ชื่อยา" value={formMed.name || ''} onChange={e => setFormMed({...formMed, name: e.target.value})}/>
-                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500" placeholder="ขนาด (เช่น 1 เม็ด)" value={formMed.dose || ''} onChange={e => setFormMed({...formMed, dose: e.target.value})}/>
-                            <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500" placeholder="รายละเอียด (เช่น หลังอาหาร)" value={formMed.detail || ''} onChange={e => setFormMed({...formMed, detail: e.target.value})}/>
-                            <div className="grid grid-cols-2 gap-2">
-                                {['เช้า','กลางวัน','เย็น','ก่อนนอน','อื่นๆ'].map(p => (
-                                    <button key={p} onClick={() => setFormMed({...formMed, period: p})} className={`p-2 rounded-xl text-sm border ${formMed.period === p ? 'bg-emerald-50 border-emerald-500 text-emerald-700 font-bold' : 'border-slate-100 text-slate-400'}`}>{p}</button>
-                                ))}
+                            
+                            <div className="flex gap-2">
+                                <input className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500" placeholder="ขนาด (เช่น 1 เม็ด)" value={formMed.dose || ''} onChange={e => setFormMed({...formMed, dose: e.target.value})}/>
+                                <div className="relative flex-1">
+                                    <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500 appearance-none text-slate-600" value={formMed.detail || 'หลังอาหาร'} onChange={e => setFormMed({...formMed, detail: e.target.value})}>
+                                        <option value="หลังอาหาร">หลังอาหาร</option>
+                                        <option value="ก่อนอาหาร">ก่อนอาหาร</option>
+                                        <option value="พร้อมอาหาร">พร้อมอาหาร</option>
+                                        <option value="ก่อนนอน">ก่อนนอน</option>
+                                        <option value="ท้องว่าง">ท้องว่าง</option>
+                                    </select>
+                                    <ChevronRight className="absolute right-4 top-4 text-slate-400 rotate-90" size={20}/>
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <label className="text-xs font-bold text-slate-400 mb-3 block">ช่วงเวลาที่กิน</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['เช้า','กลางวัน','เย็น','ก่อนนอน','อื่นๆ'].map(p => (
+                                        <button key={p} onClick={() => setFormMed({...formMed, period: p})} className={`p-2 rounded-xl text-sm border transition-all ${formMed.period === p ? 'bg-emerald-500 border-emerald-500 text-white font-bold shadow-md' : 'bg-white border-slate-200 text-slate-500'}`}>{p}</button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <label className="text-xs font-bold text-slate-400 mb-2 block">ระยะเวลาการกินยา</label>
+                                <div className="flex items-center gap-3 mb-3 cursor-pointer" onClick={() => setFormMed({...formMed, isForever: !formMed.isForever})}>
+                                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${formMed.isForever ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300'}`}>
+                                        {formMed.isForever && <Check size={14} className="text-white"/>}
+                                    </div>
+                                    <span className="text-sm font-medium text-slate-700 flex items-center gap-1"><InfinityIcon size={16}/> กินตลอดไป (ยาประจำ)</span>
+                                </div>
+                                
+                                {!formMed.isForever && (
+                                    <div className="animate-fade-in-down">
+                                        <label className="text-xs text-slate-400 mb-1 block">กินถึงวันที่</label>
+                                        <input type="date" className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none focus:border-emerald-500" value={formMed.endDate || ''} onChange={e => setFormMed({...formMed, endDate: e.target.value})}/>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="flex gap-3">
