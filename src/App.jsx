@@ -9,7 +9,7 @@ import {
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
   Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
   XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History,
-  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown
+  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown, Share
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -77,9 +77,7 @@ const calculateAverage = (data, key) => {
 // ตรวจสอบว่ายาต้องกินวันนี้ไหม (ตาม Start/End Date)
 const isMedActiveToday = (med) => {
     const today = getTodayStr();
-    // ถ้ามี StartDate และวันนี้ยังไม่ถึง -> ไม่แสดง
     if (med.startDate && today < med.startDate) return false;
-    // ถ้าไม่ใช่กินตลอดไป และมี EndDate และวันนี้เลยกำหนดแล้ว -> ไม่แสดง
     if (!med.isForever && med.endDate && today > med.endDate) return false;
     return true;
 };
@@ -94,7 +92,6 @@ const groupMedsByPeriod = (meds) => {
         'อื่นๆ': []
     };
     
-    // กรองยาที่ Active ก่อนจัดกลุ่ม
     const activeMeds = meds.filter(isMedActiveToday);
 
     activeMeds.forEach(med => {
@@ -366,7 +363,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     // Forms
     const [showInputModal, setShowInputModal] = useState(false);
     const [inputType, setInputType] = useState('bp');
-    const [formHealth, setFormHealth] = useState({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '' });
+    const [formHealth, setFormHealth] = useState({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
     
     // Med Form State (Expanded)
     const [showMedModal, setShowMedModal] = useState(false); 
@@ -421,13 +418,13 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const handleAddHealth = async () => { 
         setSubmitting(true);
         try {
-            let data = { type: inputType, dateStr: getTodayStr(), timestamp: serverTimestamp() }; 
+            let data = { type: inputType, dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' }; 
             if (inputType === 'bp') data = { ...data, sys: Number(formHealth.sys), dia: Number(formHealth.dia) };
             else if(inputType === 'sugar') data = { ...data, sugar: Number(formHealth.sugar) };
             else if(inputType === 'weight') data = { ...data, weight: parseFloat(formHealth.weight) };
             else if(inputType === 'lab') data = { ...data, hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr };
             await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), data); 
-            setShowInputModal(false); setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '' });
+            setShowInputModal(false); setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
             showToast('บันทึกข้อมูลเรียบร้อย');
         } catch(e) { showToast('เกิดข้อผิดพลาด', 'error'); } finally { setSubmitting(false); }
     };
@@ -449,6 +446,22 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     
     const handleSave = async (fn) => { setSubmitting(true); try { await fn(); showToast('บันทึกสำเร็จ'); } catch(e) { showToast("เกิดข้อผิดพลาด", 'error'); } setSubmitting(false); };
     
+    const handleShareToLine = () => {
+        const todayStr = new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+        const taken = medHistory[getTodayStr()]?.takenMeds?.length || 0;
+        const total = meds.filter(isMedActiveToday).length;
+        
+        let message = `📅 รายงานสุขภาพ ${todayStr}\nคุณ ${profile?.name || 'ผู้ใช้งาน'}\n\n`;
+        
+        if (latestBP) message += `❤️ ความดัน: ${latestBP.sys}/${latestBP.dia} mmHg\n`;
+        if (latestSugar) message += `🩸 น้ำตาล: ${latestSugar.sugar} mg/dL\n`;
+        message += `💊 กินยาแล้ว: ${taken}/${total} รายการ\n`;
+        
+        message += `\nดูแลโดย ThaiHealth App`;
+        
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(message)}`, '_blank');
+    };
+
     // --- Render Logic ---
     const latestBP = healthLogs.filter(x => x.type === 'bp').pop();
     const latestSugar = healthLogs.filter(x => x.type === 'sugar').pop();
@@ -491,6 +504,11 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     <div className="space-y-6">
                         <CurrentTimeWidget />
                         
+                        {/* Share Button (New) */}
+                        <button onClick={handleShareToLine} className="w-full bg-[#06C755] text-white p-3 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-md hover:bg-[#05b64d] transition-all mb-2">
+                            <Share2 size={20}/> แชร์สรุปวันนี้เข้า LINE
+                        </button>
+
                         {/* Health Stats */}
                         <div className="grid grid-cols-3 gap-3">
                              <StatCard title="ความดัน" value={latestBP ? `${latestBP.sys}/${latestBP.dia}` : '-'} rawValue={latestBP?.sys} statusType="sys" unit="mmHg" icon={Heart} colorClass="bg-red-500" onClick={() => setActiveTab('stats')}/>
@@ -643,6 +661,68 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     </div>
                 )}
                 
+                {activeTab === 'profile' && (
+                    <div className="space-y-6">
+                        <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-[32px] p-8 text-white text-center shadow-lg shadow-emerald-200 relative overflow-hidden">
+                             <div className="absolute top-0 right-0 opacity-10"><Shield size={180}/></div>
+                             <p className="text-emerald-100 text-sm mb-1 uppercase tracking-wider">Smart ID ของฉัน</p>
+                             <h1 className="text-5xl font-bold tracking-widest mb-4 font-mono">{profile?.shortId || '------'}</h1>
+                             <p className="text-xs bg-white/20 inline-block px-4 py-1 rounded-full backdrop-blur-sm">ใช้รหัสนี้เชื่อมต่อกับลูกหลาน</p>
+                        </div>
+                        
+                        <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><User className="text-emerald-500"/> ข้อมูลส่วนตัว</h3>
+                                <button onClick={() => { setFormProfile(profile); setShowEditProfile(true); }} className="text-slate-400 hover:text-emerald-600"><Edit2 size={18}/></button>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="flex justify-between border-b border-slate-50 pb-3">
+                                    <span className="text-slate-400 text-sm">ชื่อ-สกุล</span>
+                                    <span className="font-bold text-slate-700">{profile?.name}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-slate-50 pb-3">
+                                    <span className="text-slate-400 text-sm">อายุ</span>
+                                    <span className="font-bold text-slate-700">{profile?.age || '-'} ปี</span>
+                                </div>
+                                <div className="flex justify-between border-b border-slate-50 pb-3">
+                                    <span className="text-slate-400 text-sm">โรคประจำตัว</span>
+                                    <span className="font-bold text-slate-700 text-right max-w-[60%] truncate">{profile?.diseases || '-'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 text-sm">แพ้ยา</span>
+                                    <span className="font-bold text-red-500 text-right max-w-[60%] truncate">{profile?.allergies || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                             <div className="flex justify-between items-center mb-4 px-2">
+                                <h3 className="font-bold text-slate-700 text-lg">ลูกหลาน ({family.length})</h3>
+                                <button onClick={() => { setFormFamily({name:'',phone:'',relation:'ลูก'}); setEditFamilyId(null); setShowFamilyModal(true); }} className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100">+ เพิ่ม</button>
+                             </div>
+                             <div className="grid gap-3">
+                                {family.map(f => (
+                                    <div key={f.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center font-bold">{f.name.charAt(0)}</div>
+                                            <div>
+                                                <p className="font-bold text-slate-700">{f.name}</p>
+                                                <p className="text-xs text-slate-400">{f.relation}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {f.phone && <a href={`tel:${f.phone}`} className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100"><Phone size={18}/></a>}
+                                            <button onClick={() => setDeleteConfirm({isOpen:true, collection:'family_members', id:f.id, title:f.name})} className="w-10 h-10 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500"><Trash2 size={18}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
+                        </div>
+                        
+                        <button onClick={() => signOut(auth)} className="w-full py-4 text-red-400 font-bold bg-white rounded-2xl border border-red-50 hover:bg-red-50 transition-colors">ออกจากระบบ</button>
+                    </div>
+                )}
+                
                 {activeTab === 'stats' && (
                     <div className="space-y-6">
                         <h1 className="text-2xl font-bold text-slate-800 mb-4">สถิติสุขภาพ</h1>
@@ -678,7 +758,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             {/* MODALS */}
             {showInputModal && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white w-full sm:max-w-sm rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl animate-slide-up">
+                    <div className="bg-white w-full sm:max-w-sm rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
                         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6"></div>
                         <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">บันทึกข้อมูลวันนี้</h2>
                         <div className="grid grid-cols-4 gap-2 mb-6">
@@ -688,12 +768,24 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                 </button>
                             ))}
                         </div>
-                        <div className="mb-8">
+                        <div className="mb-6">
                              {inputType === 'bp' && <div className="flex gap-4"><input type="number" placeholder="บน (120)" className="w-full p-4 bg-slate-50 rounded-2xl text-center text-xl font-bold border-2 border-transparent focus:border-emerald-500 outline-none" onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/><input type="number" placeholder="ล่าง (80)" className="w-full p-4 bg-slate-50 rounded-2xl text-center text-xl font-bold border-2 border-transparent focus:border-emerald-500 outline-none" onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/></div>}
                              {inputType === 'sugar' && <input type="number" placeholder="ระดับน้ำตาล (mg/dL)" className="w-full p-4 bg-orange-50 text-orange-700 rounded-2xl text-center text-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none" onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>}
                              {inputType === 'weight' && <input type="number" placeholder="น้ำหนัก (kg)" className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl text-center text-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>}
                              {inputType === 'lab' && <div className="space-y-3"><input type="number" placeholder="HbA1c" className="w-full p-3 bg-slate-50 rounded-xl" onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/><input type="number" placeholder="ไขมัน (LDL)" className="w-full p-3 bg-slate-50 rounded-xl" onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/></div>}
                         </div>
+                        
+                        {/* Note Section (New) */}
+                        <div className="mb-6">
+                            <label className="text-xs font-bold text-slate-400 mb-2 block">อาการ / หมายเหตุ (ถ้ามี)</label>
+                            <textarea 
+                                className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-emerald-500 outline-none transition-all resize-none text-sm" 
+                                placeholder="เช่น เวียนหัว, นอนน้อย, กินเค็มมา..." 
+                                rows="2"
+                                onChange={e => setFormHealth({...formHealth, note: e.target.value})}
+                            ></textarea>
+                        </div>
+
                         <button onClick={handleAddHealth} disabled={submitting} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200">{submitting ? <Loader2 className="animate-spin mx-auto"/> : 'บันทึก'}</button>
                         <button onClick={() => setShowInputModal(false)} className="w-full py-4 text-slate-400 font-bold mt-2">ยกเลิก</button>
                     </div>
