@@ -13,22 +13,31 @@ import {
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
-  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously 
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut 
 } from 'firebase/auth';
 import { 
   getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, 
   serverTimestamp, setDoc, deleteDoc, query, orderBy, getDoc, where, getDocs, limit 
 } from 'firebase/firestore';
 
-// --- 1. การตั้งค่า Firebase ---
-const firebaseConfig = JSON.parse(__firebase_config);
+// --- 1. การตั้งค่า Firebase (ของคุณ) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBILcG2lnb_dhsENlPtYboFrGj_gP3D3d8",
+  authDomain: "thaihealth-fcd28.firebaseapp.com",
+  projectId: "thaihealth-fcd28",
+  storageBucket: "thaihealth-fcd28.firebasestorage.app",
+  messagingSenderId: "250288902410",
+  appId: "1:250288902410:web:6747e94b114b6425232af3",
+  measurementId: "G-FB72B6NB2Q"
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ใช้ appId จาก Environment หรือ Default
-const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'thai-health-pro';
-const APP_COLLECTION = `thai-health-pro-v1`; 
+// ใช้ Collection เดิมของคุณ
+const APP_ID = 'thai-health-pro'; 
+const APP_COLLECTION = "thai-health-production-v2-pro"; 
 
 // --- Helpers & Utilities ---
 const getTodayStr = () => {
@@ -188,14 +197,14 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         if (!targetUid) return;
         
         // Fetch Real-time Data
-        const unsubHealth = onSnapshot(query(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'health_logs'), orderBy('timestamp', 'asc')), s => {
+        const unsubHealth = onSnapshot(query(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), orderBy('timestamp', 'asc')), s => {
              setHealthLogs(s.docs.map(d => ({id: d.id, ...d.data()}))); 
              setLoading(false);
         });
-        const unsubMeds = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'medications'), s => setMeds(s.docs.map(d => ({id: d.id, ...d.data()}))));
-        const unsubHistory = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'daily_logs'), s => { const h = {}; s.docs.forEach(d => h[d.id] = d.data()); setMedHistory(h); });
-        const unsubAppts = onSnapshot(query(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'appointments'), orderBy('date')), s => setAppointments(s.docs.map(d => ({id: d.id, ...d.data()}))));
-        const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_ID, 'users', targetUid, 'profile', 'main'), (s) => {
+        const unsubMeds = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'medications'), s => setMeds(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const unsubHistory = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'daily_logs'), s => { const h = {}; s.docs.forEach(d => h[d.id] = d.data()); setMedHistory(h); });
+        const unsubAppts = onSnapshot(query(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'appointments'), orderBy('date')), s => setAppointments(s.docs.map(d => ({id: d.id, ...d.data()}))));
+        const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), (s) => {
             if(s.exists()) setProfile(s.data());
         });
 
@@ -212,28 +221,28 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
 
             // 1. Save BP if entered
             if (unifiedForm.sys && unifiedForm.dia) {
-                batchPromises.push(addDoc(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'health_logs'), {
+                batchPromises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), {
                     type: 'bp', sys: Number(unifiedForm.sys), dia: Number(unifiedForm.dia), 
                     note: unifiedForm.note, dateStr, timestamp
                 }));
             }
             // 2. Save Sugar if entered
             if (unifiedForm.sugar) {
-                batchPromises.push(addDoc(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'health_logs'), {
+                batchPromises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), {
                     type: 'sugar', sugar: Number(unifiedForm.sugar), 
                     note: unifiedForm.note, dateStr, timestamp
                 }));
             }
             // 3. Save Weight if entered
             if (unifiedForm.weight) {
-                batchPromises.push(addDoc(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'health_logs'), {
+                batchPromises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), {
                     type: 'weight', weight: Number(unifiedForm.weight), 
                     note: unifiedForm.note, dateStr, timestamp
                 }));
             }
             // 4. Save Lab if entered
             if (unifiedForm.hba1c || unifiedForm.lipid) {
-                batchPromises.push(addDoc(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'health_logs'), {
+                batchPromises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), {
                     type: 'lab', hba1c: unifiedForm.hba1c, lipid: unifiedForm.lipid,
                     note: unifiedForm.note, dateStr, timestamp
                 }));
@@ -241,7 +250,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
 
             // If only note entered (log as general note)
             if (!unifiedForm.sys && !unifiedForm.sugar && !unifiedForm.weight && !unifiedForm.hba1c && unifiedForm.note) {
-                 batchPromises.push(addDoc(collection(db, 'artifacts', APP_ID, 'users', targetUid, 'health_logs'), {
+                 batchPromises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), {
                     type: 'note', note: unifiedForm.note, dateStr, timestamp
                 }));
             }
@@ -269,7 +278,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const toggleMedToday = async (medId) => { 
         if(!canEdit) return;
         const today = getTodayStr(); 
-        const ref = doc(db, 'artifacts', APP_ID, 'users', targetUid, 'daily_logs', today); 
+        const ref = doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'daily_logs', today); 
         const current = medHistory[today]?.takenMeds || []; 
         const newTaken = current.includes(medId) ? current.filter(id => id !== medId) : [...current, medId]; 
         await setDoc(ref, { takenMeds: newTaken }, { merge: true }); 
@@ -590,7 +599,7 @@ const PatientListCard = ({ patient, onSelect, onRemove }) => {
 
     useEffect(() => {
         // Fetch only the latest BP for the card preview
-        const q = query(collection(db, 'artifacts', APP_ID, 'users', patient.uid, 'health_logs'), where('type', '==', 'bp'), orderBy('timestamp', 'desc'), limit(1));
+        const q = query(collection(db, 'artifacts', APP_COLLECTION, 'users', patient.uid, 'health_logs'), where('type', '==', 'bp'), orderBy('timestamp', 'desc'), limit(1));
         const unsub = onSnapshot(q, (s) => {
             if(!s.empty) setLatestBP(s.docs[0].data());
             setLoading(false);
@@ -643,7 +652,7 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
     const [alertMsg, setAlertMsg] = useState('');
 
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'watching'), (snap) => {
+        const unsub = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching'), (snap) => {
             const list = [];
             snap.forEach(d => list.push({ uid: d.id, ...d.data() }));
             setPatients(list);
@@ -655,15 +664,15 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
         if(addId.length < 6) return;
         setLoadingAdd(true); setAlertMsg('');
         try {
-            const q = query(collection(db, 'artifacts', APP_ID, 'public_smart_ids'), where("smartId", "==", addId));
+            const q = query(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), where("smartId", "==", addId));
             const snap = await getDocs(q);
             if (!snap.empty) {
                 const targetUid = snap.docs[0].data().uid;
                 // Fetch profile to get name/disease immediately
-                const pSnap = await getDoc(doc(db, 'artifacts', APP_ID, 'users', targetUid, 'profile', 'main'));
+                const pSnap = await getDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'));
                 const pData = pSnap.exists() ? pSnap.data() : { name: `User ${addId}` };
                 
-                await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'watching', targetUid), { 
+                await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', targetUid), { 
                     smartId: addId, 
                     name: pData.name,
                     diseases: pData.diseases || '',
@@ -683,7 +692,7 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
 
     const handleRemovePatient = async (targetUid) => {
         if(confirm('ต้องการยกเลิกการดูแลคนไข้ท่านนี้ใช่ไหม?')) {
-            await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'watching', targetUid));
+            await deleteDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', targetUid));
         }
     };
 
@@ -745,15 +754,8 @@ const AuthScreen = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    useEffect(() => {
-        const initAuth = async () => {
-            // Check for provided token in environment
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                try { await signInWithCustomToken(auth, __initial_auth_token); } catch(e) { console.error("Token Auth Failed", e); }
-            }
-        };
-        initAuth();
-    }, []);
+    // Removed auto-login useEffect to prevent custom token mismatch error
+    // Users must login manually with their own credentials for custom projects
 
     const handleAuth = async (e) => {
         e.preventDefault(); setLoading(true); setError('');
@@ -830,7 +832,7 @@ export default function App() {
         setUser(u); 
         if(u) {
             try {
-                const s = await getDoc(doc(db, 'artifacts', APP_ID, 'users', u.uid));
+                const s = await getDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', u.uid));
                 if(s.exists()) setRole(s.data().role);
             } catch(e) {}
         }
@@ -843,11 +845,11 @@ export default function App() {
       const data = { role: r, setupAt: serverTimestamp() };
       if(r === 'patient') {
           const sid = generateSmartId();
-          await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), { name: "ผู้ใช้งาน", shortId: sid }, { merge: true });
-          await addDoc(collection(db, 'artifacts', APP_ID, 'public_smart_ids'), { smartId: sid, uid: user.uid });
+          await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'profile', 'main'), { name: "ผู้ใช้งาน", shortId: sid }, { merge: true });
+          await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), { smartId: sid, uid: user.uid });
           data.shortId = sid;
       }
-      await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid), data, { merge: true });
+      await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid), data, { merge: true });
       setRole(r);
   };
 
