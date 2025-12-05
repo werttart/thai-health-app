@@ -339,7 +339,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             } else {
                 if(currentUserRole === 'patient') {
                     const sid = generateSmartId();
-                    await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), { name: "ผู้ใช้งานใหม่", shortId: sid, created: serverTimestamp() });
+                    await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), { name: "ผู้สูงอายุ", shortId: sid, created: serverTimestamp() });
                     await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids'), { smartId: sid, uid: targetUid, createdAt: serverTimestamp() });
                 }
             }
@@ -770,14 +770,25 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
                 const targetDoc = querySnapshot.docs[0];
                 const targetUid = targetDoc.data().uid;
                 
-                // Get Patient Name
+                // Get Patient Name and Details from Profile
                 const profileSnap = await getDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'));
-                const patientName = profileSnap.exists() ? profileSnap.data().name : `คนไข้ (${addId})`;
-
-                await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', targetUid), {
-                    name: patientName,
+                
+                let patientData = {
+                    name: `คนไข้ (${addId})`,
+                    age: '',
+                    diseases: '',
+                    smartId: addId,
                     addedAt: serverTimestamp()
-                });
+                };
+
+                if (profileSnap.exists()) {
+                    const p = profileSnap.data();
+                    patientData.name = p.name || patientData.name;
+                    patientData.age = p.age || '';
+                    patientData.diseases = Array.isArray(p.diseases) ? p.diseases.join(', ') : (p.diseases || '');
+                }
+
+                await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', targetUid), patientData);
                 setShowAddModal(false); setAddId('');
                 showToast('เชื่อมต่อสำเร็จ');
             } else {
@@ -792,10 +803,18 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
     };
     
     const handleUnlink = async (e, patientUid) => {
+        e.preventDefault();
         e.stopPropagation();
+        
         if(!confirm('คุณต้องการเลิกติดตามคนไข้นี้ใช่ไหม?')) return;
-        await deleteDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', patientUid));
-        showToast('เลิกติดตามเรียบร้อย');
+        
+        try {
+            await deleteDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', patientUid));
+            showToast('เลิกติดตามเรียบร้อย');
+        } catch (error) {
+            console.error("Error unlinking:", error);
+            showToast('เกิดข้อผิดพลาดในการลบ', 'error');
+        }
     };
 
     return (
@@ -812,10 +831,30 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
                 <div className="grid gap-4">
                     {patients.map(p => (
                         <div key={p.uid} onClick={() => onSelectPatient(p.uid)} className="bg-white p-5 rounded-[28px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer active:scale-95 transition-all hover:border-blue-200 hover:shadow-md group relative">
-                            <div className="flex items-center gap-5"><div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-200">{p.name.charAt(0)}</div><div><h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{p.name}</h3><p className="text-sm text-slate-400">คนไข้</p></div></div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={(e) => handleUnlink(e, p.uid)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors z-10"><Trash2 size={18}/></button>
-                                <div className="bg-slate-50 p-2 rounded-full group-hover:bg-blue-50 transition-colors"><ChevronRight className="text-slate-300 group-hover:text-blue-500"/></div>
+                            <div className="flex items-center gap-5">
+                                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-200 shrink-0">
+                                    {p.name ? p.name.charAt(0) : '?'}
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors line-clamp-1">{p.name}</h3>
+                                    <p className="text-sm text-slate-400 line-clamp-1">
+                                        {p.age ? `อายุ ${p.age} ปี` : ''} 
+                                        {p.age && p.diseases ? ' • ' : ''}
+                                        {p.diseases || `ID: ${p.smartId || '...'}`}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button 
+                                    onClick={(e) => handleUnlink(e, p.uid)} 
+                                    className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors z-20"
+                                    title="เลิกติดตาม"
+                                >
+                                    <Trash2 size={20}/>
+                                </button>
+                                <div className="bg-slate-50 p-2 rounded-full group-hover:bg-blue-50 transition-colors">
+                                    <ChevronRight className="text-slate-300 group-hover:text-blue-500"/>
+                                </div>
                             </div>
                         </div>
                     ))}
