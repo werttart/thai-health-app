@@ -437,37 +437,30 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const handleAddHealth = async () => { 
         setSubmitting(true);
         try {
-            const baseData = { dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' };
-            const batch = [];
+            const commonData = { dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' };
+            const promises = [];
 
-            // Add BP if filled
-            if(formHealth.sys && formHealth.dia) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'bp', sys: Number(formHealth.sys), dia: Number(formHealth.dia) }));
+            if (formHealth.sys && formHealth.dia) {
+                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'bp', sys: Number(formHealth.sys), dia: Number(formHealth.dia) }));
             }
-            // Add Sugar if filled
-            if(formHealth.sugar) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'sugar', sugar: Number(formHealth.sugar) }));
+            if (formHealth.sugar) {
+                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'sugar', sugar: Number(formHealth.sugar) }));
             }
-            // Add Weight if filled
-            if(formHealth.weight) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'weight', weight: Number(formHealth.weight) }));
+            if (formHealth.weight) {
+                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'weight', weight: Number(formHealth.weight) }));
             }
-            // Add Lab if filled (Any of the fields)
-            if(formHealth.hba1c || formHealth.lipid || formHealth.egfr) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { 
-                    ...baseData, type: 'lab', 
-                    hba1c: formHealth.hba1c ? Number(formHealth.hba1c) : null, 
-                    lipid: formHealth.lipid ? Number(formHealth.lipid) : null, 
-                    egfr: formHealth.egfr ? Number(formHealth.egfr) : null 
+            if (formHealth.hba1c || formHealth.lipid || formHealth.egfr) {
+                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { 
+                    ...commonData, type: 'lab', 
+                    hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr 
                 }));
             }
-
-            if (batch.length === 0 && formHealth.note) {
-                 // Save just a note if no data
-                 batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'note' }));
+            
+            if (promises.length === 0 && formHealth.note) {
+                 promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'note' }));
             }
 
-            await Promise.all(batch);
+            await Promise.all(promises);
             
             setShowInputModal(false); 
             setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
