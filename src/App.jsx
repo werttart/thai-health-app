@@ -9,7 +9,7 @@ import {
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
   Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
   XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History,
-  CalendarDays, CalendarRange, Infinity as InfinityIcon
+  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -131,6 +131,11 @@ const FontStyles = () => (
         body { font-family: 'Prompt', sans-serif; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes fade-in-down {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-down { animation: fade-in-down 0.2s ease-out; }
     `}</style>
 );
 
@@ -356,6 +361,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [todayTip, setTodayTip] = useState(HEALTH_TIPS[0]);
     const [notification, setNotification] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, collection: null, id: null, title: '' });
+    const [showDetailDropdown, setShowDetailDropdown] = useState(false); // Dropdown State
 
     // Forms
     const [showInputModal, setShowInputModal] = useState(false);
@@ -524,7 +530,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                         <div>
                             <div className="flex justify-between items-end mb-4 px-1">
                                 <h2 className="font-bold text-slate-700 text-xl flex items-center gap-2"><Pill className="text-emerald-500"/> ยาของฉัน</h2>
-                                {canEdit && <button onClick={() => { setFormMed({name:'', dose:'', detail:'หลังอาหาร', period:'เช้า', isForever: true, startDate: getTodayStr(), endDate: ''}); setEditMedId(null); setShowMedModal(true); }} className="text-emerald-600 text-sm font-bold bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100">+ เพิ่มยา</button>}
+                                {canEdit && <button onClick={() => { setFormMed({name:'', dose:'', detail:'หลังอาหาร', period:'เช้า', isForever: true, startDate: getTodayStr(), endDate: ''}); setEditMedId(null); setShowMedModal(true); setShowDetailDropdown(false); }} className="text-emerald-600 text-sm font-bold bg-emerald-50 px-3 py-1.5 rounded-xl hover:bg-emerald-100">+ เพิ่มยา</button>}
                             </div>
                             
                             {meds.length === 0 ? (
@@ -534,11 +540,11 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                 </div>
                             ) : (
                                 <>
-                                    <MedicineGroup title="ช่วงเช้า (06:00 - 11:00)" icon={Sunrise} meds={medGroups['เช้า']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
-                                    <MedicineGroup title="ช่วงกลางวัน (11:00 - 15:00)" icon={Sun} meds={medGroups['กลางวัน']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
-                                    <MedicineGroup title="ช่วงเย็น (16:00 - 20:00)" icon={Sunset} meds={medGroups['เย็น']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
-                                    <MedicineGroup title="ก่อนนอน" icon={Moon} meds={medGroups['ก่อนนอน']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
-                                    {medGroups['อื่นๆ'].length > 0 && <MedicineGroup title="อื่นๆ / ทั่วไป" icon={Pill} meds={medGroups['อื่นๆ']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />}
+                                    <MedicineGroup title="ช่วงเช้า (06:00 - 11:00)" icon={Sunrise} meds={medGroups['เช้า']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true); setShowDetailDropdown(false);}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
+                                    <MedicineGroup title="ช่วงกลางวัน (11:00 - 15:00)" icon={Sun} meds={medGroups['กลางวัน']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true); setShowDetailDropdown(false);}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
+                                    <MedicineGroup title="ช่วงเย็น (16:00 - 20:00)" icon={Sunset} meds={medGroups['เย็น']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true); setShowDetailDropdown(false);}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
+                                    <MedicineGroup title="ก่อนนอน" icon={Moon} meds={medGroups['ก่อนนอน']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true); setShowDetailDropdown(false);}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
+                                    {medGroups['อื่นๆ'].length > 0 && <MedicineGroup title="อื่นๆ / ทั่วไป" icon={Pill} meds={medGroups['อื่นๆ']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true); setShowDetailDropdown(false);}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />}
                                 </>
                             )}
                         </div>
@@ -637,68 +643,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     </div>
                 )}
                 
-                {activeTab === 'profile' && (
-                    <div className="space-y-6">
-                        <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-[32px] p-8 text-white text-center shadow-lg shadow-emerald-200 relative overflow-hidden">
-                             <div className="absolute top-0 right-0 opacity-10"><Shield size={180}/></div>
-                             <p className="text-emerald-100 text-sm mb-1 uppercase tracking-wider">Smart ID ของฉัน</p>
-                             <h1 className="text-5xl font-bold tracking-widest mb-4 font-mono">{profile?.shortId || '------'}</h1>
-                             <p className="text-xs bg-white/20 inline-block px-4 py-1 rounded-full backdrop-blur-sm">ใช้รหัสนี้เชื่อมต่อกับลูกหลาน</p>
-                        </div>
-                        
-                        <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><User className="text-emerald-500"/> ข้อมูลส่วนตัว</h3>
-                                <button onClick={() => { setFormProfile(profile); setShowEditProfile(true); }} className="text-slate-400 hover:text-emerald-600"><Edit2 size={18}/></button>
-                            </div>
-                            <div className="space-y-4">
-                                <div className="flex justify-between border-b border-slate-50 pb-3">
-                                    <span className="text-slate-400 text-sm">ชื่อ-สกุล</span>
-                                    <span className="font-bold text-slate-700">{profile?.name}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-50 pb-3">
-                                    <span className="text-slate-400 text-sm">อายุ</span>
-                                    <span className="font-bold text-slate-700">{profile?.age || '-'} ปี</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-50 pb-3">
-                                    <span className="text-slate-400 text-sm">โรคประจำตัว</span>
-                                    <span className="font-bold text-slate-700 text-right max-w-[60%] truncate">{profile?.diseases || '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-slate-400 text-sm">แพ้ยา</span>
-                                    <span className="font-bold text-red-500 text-right max-w-[60%] truncate">{profile?.allergies || '-'}</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                             <div className="flex justify-between items-center mb-4 px-2">
-                                <h3 className="font-bold text-slate-700 text-lg">ลูกหลาน ({family.length})</h3>
-                                <button onClick={() => { setFormFamily({name:'',phone:'',relation:'ลูก'}); setEditFamilyId(null); setShowFamilyModal(true); }} className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100">+ เพิ่ม</button>
-                             </div>
-                             <div className="grid gap-3">
-                                {family.map(f => (
-                                    <div key={f.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center font-bold">{f.name.charAt(0)}</div>
-                                            <div>
-                                                <p className="font-bold text-slate-700">{f.name}</p>
-                                                <p className="text-xs text-slate-400">{f.relation}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            {f.phone && <a href={`tel:${f.phone}`} className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100"><Phone size={18}/></a>}
-                                            <button onClick={() => setDeleteConfirm({isOpen:true, collection:'family_members', id:f.id, title:f.name})} className="w-10 h-10 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500"><Trash2 size={18}/></button>
-                                        </div>
-                                    </div>
-                                ))}
-                             </div>
-                        </div>
-                        
-                        <button onClick={() => signOut(auth)} className="w-full py-4 text-red-400 font-bold bg-white rounded-2xl border border-red-50 hover:bg-red-50 transition-colors">ออกจากระบบ</button>
-                    </div>
-                )}
-                
                 {activeTab === 'stats' && (
                     <div className="space-y-6">
                         <h1 className="text-2xl font-bold text-slate-800 mb-4">สถิติสุขภาพ</h1>
@@ -766,14 +710,31 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                             <div className="flex gap-2">
                                 <input className="flex-1 p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500" placeholder="ขนาด (เช่น 1 เม็ด)" value={formMed.dose || ''} onChange={e => setFormMed({...formMed, dose: e.target.value})}/>
                                 <div className="relative flex-1">
-                                    <select className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500 appearance-none text-slate-600" value={formMed.detail || 'หลังอาหาร'} onChange={e => setFormMed({...formMed, detail: e.target.value})}>
-                                        <option value="หลังอาหาร">หลังอาหาร</option>
-                                        <option value="ก่อนอาหาร">ก่อนอาหาร</option>
-                                        <option value="พร้อมอาหาร">พร้อมอาหาร</option>
-                                        <option value="ก่อนนอน">ก่อนนอน</option>
-                                        <option value="ท้องว่าง">ท้องว่าง</option>
-                                    </select>
-                                    <ChevronRight className="absolute right-4 top-4 text-slate-400 rotate-90" size={20}/>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowDetailDropdown(!showDetailDropdown)}
+                                        className="w-full p-4 bg-slate-50 rounded-2xl outline-none border border-transparent focus:border-emerald-500 text-slate-600 flex justify-between items-center"
+                                    >
+                                        <span className="font-medium">{formMed.detail || 'หลังอาหาร'}</span>
+                                        <ChevronDown className={`text-slate-400 transition-transform duration-200 ${showDetailDropdown ? 'rotate-180' : ''}`} size={20}/>
+                                    </button>
+                                    
+                                    {showDetailDropdown && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden max-h-48 overflow-y-auto animate-fade-in-down">
+                                            {['หลังอาหาร', 'ก่อนอาหาร', 'พร้อมอาหาร', 'ก่อนนอน', 'ท้องว่าง'].map((opt) => (
+                                                <button
+                                                    key={opt}
+                                                    onClick={() => {
+                                                        setFormMed({ ...formMed, detail: opt });
+                                                        setShowDetailDropdown(false);
+                                                    }}
+                                                    className={`w-full text-left p-4 transition-colors border-b border-slate-50 last:border-0 ${formMed.detail === opt ? 'bg-emerald-50 text-emerald-600 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}
+                                                >
+                                                    {opt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
