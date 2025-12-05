@@ -9,7 +9,8 @@ import {
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
   Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
   XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History,
-  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown, Share
+  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown, Share, Navigation, TestTube,
+  FileDigit, List, Save
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -72,6 +73,21 @@ const calculateAverage = (data, key) => {
     if (validData.length === 0) return '-';
     const sum = validData.reduce((acc, curr) => acc + Number(curr[key]), 0);
     return Math.round(sum / validData.length);
+};
+
+// Logic การประเมินสุขภาพ (Smart Health Analysis)
+const analyzeBP = (sys, dia) => {
+    if (!sys || !dia) return { label: 'รอข้อมูล', color: 'text-slate-400', bg: 'bg-slate-50', icon: Activity };
+    if (sys >= 140 || dia >= 90) return { label: 'สูง (อันตราย)', color: 'text-red-600', bg: 'bg-red-50 border-red-100', icon: AlertTriangle };
+    if (sys >= 120 || dia >= 80) return { label: 'ค่อนข้างสูง', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100', icon: Activity };
+    return { label: 'ปกติ', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: CheckCircle };
+};
+
+const analyzeSugar = (sugar) => {
+    if (!sugar) return { label: 'รอข้อมูล', color: 'text-slate-400', bg: 'bg-slate-50', icon: Activity };
+    if (sugar >= 126) return { label: 'เสี่ยงเบาหวาน', color: 'text-red-600', bg: 'bg-red-50 border-red-100', icon: AlertTriangle };
+    if (sugar >= 100) return { label: 'เสี่ยงเล็กน้อย', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100', icon: Activity };
+    return { label: 'ปกติ', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100', icon: CheckCircle };
 };
 
 // ตรวจสอบว่ายาต้องกินวันนี้ไหม (ตาม Start/End Date)
@@ -172,25 +188,25 @@ const CurrentTimeWidget = () => {
     );
 };
 
-const StatCard = ({ title, value, unit, icon: Icon, colorClass, onClick, statusType, rawValue }) => (
-  <div onClick={onClick} className="bg-white p-5 rounded-[24px] shadow-sm border border-slate-100 flex-1 min-w-[100px] cursor-pointer hover:shadow-md transition-all active:scale-95 relative overflow-hidden group">
-    <div className={`p-3 rounded-2xl w-fit mb-3 ${colorClass} bg-opacity-10 text-opacity-100`}>
-        <Icon size={24} className={colorClass.replace('bg-', 'text-').replace('/10', '')} />
+const StatCard = ({ title, value, unit, icon: Icon, colorClass, onClick, analysis, isActive }) => (
+  <div onClick={onClick} className={`p-5 rounded-[24px] shadow-sm border flex-1 min-w-[100px] cursor-pointer hover:shadow-md transition-all active:scale-95 relative overflow-hidden group ${isActive ? 'ring-2 ring-emerald-500 bg-emerald-50/50' : (analysis ? analysis.bg : 'bg-white border-slate-100')}`}>
+    <div className="flex justify-between items-start mb-2">
+        <div className={`p-2.5 rounded-2xl w-fit ${colorClass} bg-opacity-10 text-opacity-100`}>
+            <Icon size={20} className={colorClass.replace('bg-', 'text-').replace('/10', '')} />
+        </div>
+        {analysis && (
+            <span className={`text-[10px] font-bold px-2 py-1 rounded-full bg-white/80 backdrop-blur-sm border border-white/50 ${analysis.color}`}>
+                {analysis.label}
+            </span>
+        )}
     </div>
     <div className="flex flex-col">
-        <span className="text-slate-400 font-medium text-xs uppercase tracking-wide mb-1">{title}</span>
+        <span className="text-slate-500 font-medium text-xs uppercase tracking-wide mb-1 opacity-80">{title}</span>
         <div className="flex items-baseline gap-1">
-            <span className="font-bold text-slate-800 text-2xl">{value || '-'}</span>
-            <span className="text-slate-400 text-xs">{unit}</span>
+            <span className="font-bold text-slate-800 text-xl md:text-2xl">{value || '-'}</span>
+            <span className="text-slate-500 text-[10px] font-medium">{unit}</span>
         </div>
     </div>
-    {statusType && rawValue && (
-          <div className={`absolute top-4 right-4 w-2.5 h-2.5 rounded-full ring-4 ring-slate-50
-            ${(statusType === 'sys' && rawValue > 140) || (statusType === 'sugar' && rawValue > 125) 
-                ? 'bg-red-500 animate-pulse' 
-                : (statusType === 'sys' && rawValue > 120) ? 'bg-orange-400' : 'bg-emerald-500'}`
-          }></div>
-    )}
   </div>
 );
 
@@ -353,7 +369,11 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [gpsLocation, setGpsLocation] = useState(null);
     
+    // Stats Dashboard State
+    const [selectedStat, setSelectedStat] = useState('bp');
+
     // UI State
     const [todayTip, setTodayTip] = useState(HEALTH_TIPS[0]);
     const [notification, setNotification] = useState(null);
@@ -362,7 +382,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
 
     // Forms
     const [showInputModal, setShowInputModal] = useState(false);
-    const [inputType, setInputType] = useState('bp');
     const [formHealth, setFormHealth] = useState({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
     
     // Med Form State (Expanded)
@@ -406,10 +425,18 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             }
         });
         
-        const unsubHealth = onSnapshot(query(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), orderBy('timestamp')), s => {
-             setHealthLogs(s.docs.map(d => ({id: d.id, ...d.data()}))); 
-             setLoading(false);
-        });
+        const unsubHealth = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), 
+            (s) => {
+                 const data = s.docs.map(d => ({id: d.id, ...d.data()}));
+                 data.sort((a,b) => (a.timestamp?.seconds || 0) - (b.timestamp?.seconds || 0));
+                 setHealthLogs(data); 
+                 setLoading(false);
+            },
+            (error) => {
+                console.error("Health logs error:", error);
+                setLoading(false); 
+            }
+        );
         
         return () => { unsubMeds(); unsubHistory(); unsubAppts(); unsubFamily(); unsubProfile(); unsubHealth(); };
     }, [targetUid, currentUserRole]);
@@ -418,15 +445,42 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const handleAddHealth = async () => { 
         setSubmitting(true);
         try {
-            let data = { type: inputType, dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' }; 
-            if (inputType === 'bp') data = { ...data, sys: Number(formHealth.sys), dia: Number(formHealth.dia) };
-            else if(inputType === 'sugar') data = { ...data, sugar: Number(formHealth.sugar) };
-            else if(inputType === 'weight') data = { ...data, weight: parseFloat(formHealth.weight) };
-            else if(inputType === 'lab') data = { ...data, hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr };
-            await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), data); 
-            setShowInputModal(false); setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
+            const baseData = { dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' };
+            const batch = [];
+
+            // Add BP if filled
+            if(formHealth.sys && formHealth.dia) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'bp', sys: Number(formHealth.sys), dia: Number(formHealth.dia) }));
+            }
+            // Add Sugar if filled
+            if(formHealth.sugar) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'sugar', sugar: Number(formHealth.sugar) }));
+            }
+            // Add Weight if filled
+            if(formHealth.weight) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'weight', weight: Number(formHealth.weight) }));
+            }
+            // Add Lab if filled (Any of the fields)
+            if(formHealth.hba1c || formHealth.lipid || formHealth.egfr) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { 
+                    ...baseData, type: 'lab', 
+                    hba1c: formHealth.hba1c ? Number(formHealth.hba1c) : null, 
+                    lipid: formHealth.lipid ? Number(formHealth.lipid) : null, 
+                    egfr: formHealth.egfr ? Number(formHealth.egfr) : null 
+                }));
+            }
+
+            if (batch.length === 0 && formHealth.note) {
+                 // Save just a note if no data
+                 batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'note' }));
+            }
+
+            await Promise.all(batch);
+            
+            setShowInputModal(false); 
+            setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
             showToast('บันทึกข้อมูลเรียบร้อย');
-        } catch(e) { showToast('เกิดข้อผิดพลาด', 'error'); } finally { setSubmitting(false); }
+        } catch(e) { console.error(e); showToast('เกิดข้อผิดพลาด', 'error'); } finally { setSubmitting(false); }
     };
     
     const toggleMedToday = async (medId) => { 
@@ -453,8 +507,8 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         
         let message = `📅 รายงานสุขภาพ ${todayStr}\nคุณ ${profile?.name || 'ผู้ใช้งาน'}\n\n`;
         
-        if (latestBP) message += `❤️ ความดัน: ${latestBP.sys}/${latestBP.dia} mmHg\n`;
-        if (latestSugar) message += `🩸 น้ำตาล: ${latestSugar.sugar} mg/dL\n`;
+        if (latestBP) message += `❤️ ความดัน: ${latestBP.sys}/${latestBP.dia} mmHg (${analyzeBP(latestBP.sys, latestBP.dia).label})\n`;
+        if (latestSugar) message += `🩸 น้ำตาล: ${latestSugar.sugar} mg/dL (${analyzeSugar(latestSugar.sugar).label})\n`;
         message += `💊 กินยาแล้ว: ${taken}/${total} รายการ\n`;
         
         message += `\nดูแลโดย ThaiHealth App`;
@@ -462,10 +516,30 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         window.open(`https://line.me/R/msg/text/?${encodeURIComponent(message)}`, '_blank');
     };
 
+    const fetchLocation = () => { 
+        if (navigator.geolocation) { 
+            navigator.geolocation.getCurrentPosition(
+                (p) => setGpsLocation(`${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`),
+                (err) => { console.error(err); showToast("ไม่สามารถดึงพิกัดได้ กรุณาเปิด GPS", 'error'); }
+            ); 
+        } else setGpsLocation("อุปกรณ์ไม่รองรับ"); 
+    };
+
+    const handleSOS = () => {
+        if (!gpsLocation) {
+            alert("กรุณารอ GPS จับสัญญาณสักครู่ แล้วกดใหม่อีกครั้ง");
+            fetchLocation();
+            return;
+        }
+        const message = `🆘 ช่วยด้วย! ฉุกเฉิน! \nพิกัดของฉัน: https://maps.google.com/?q=${gpsLocation}`;
+        window.open(`https://line.me/R/msg/text/?${encodeURIComponent(message)}`, '_blank');
+    };
+
     // --- Render Logic ---
     const latestBP = healthLogs.filter(x => x.type === 'bp').pop();
     const latestSugar = healthLogs.filter(x => x.type === 'sugar').pop();
     const latestWeight = healthLogs.filter(x => x.type === 'weight').pop();
+    const latestLab = healthLogs.filter(x => x.type === 'lab').pop();
     
     const medGroups = groupMedsByPeriod(meds);
     const nextAppt = appointments.filter(a => new Date(a.date) >= new Date().setHours(0,0,0,0))[0];
@@ -504,15 +578,31 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     <div className="space-y-6">
                         <CurrentTimeWidget />
                         
-                        {/* Share Button (New) */}
+                        {/* Share Button */}
                         <button onClick={handleShareToLine} className="w-full bg-[#06C755] text-white p-3 rounded-2xl flex items-center justify-center gap-2 font-bold shadow-md hover:bg-[#05b64d] transition-all mb-2">
                             <Share2 size={20}/> แชร์สรุปวันนี้เข้า LINE
                         </button>
 
-                        {/* Health Stats */}
+                        {/* Health Stats Summary */}
                         <div className="grid grid-cols-3 gap-3">
-                             <StatCard title="ความดัน" value={latestBP ? `${latestBP.sys}/${latestBP.dia}` : '-'} rawValue={latestBP?.sys} statusType="sys" unit="mmHg" icon={Heart} colorClass="bg-red-500" onClick={() => setActiveTab('stats')}/>
-                             <StatCard title="น้ำตาล" value={latestSugar ? latestSugar.sugar : '-'} rawValue={latestSugar?.sugar} statusType="sugar" unit="mg/dL" icon={Droplet} colorClass="bg-orange-500" onClick={() => setActiveTab('stats')}/>
+                             <StatCard 
+                                title="ความดัน" 
+                                value={latestBP ? `${latestBP.sys}/${latestBP.dia}` : '-'} 
+                                unit="mmHg" 
+                                icon={Heart} 
+                                colorClass="bg-red-500" 
+                                onClick={() => setActiveTab('stats')}
+                                analysis={analyzeBP(latestBP?.sys, latestBP?.dia)}
+                             />
+                             <StatCard 
+                                title="น้ำตาล" 
+                                value={latestSugar ? latestSugar.sugar : '-'} 
+                                unit="mg/dL" 
+                                icon={Droplet} 
+                                colorClass="bg-orange-500" 
+                                onClick={() => setActiveTab('stats')}
+                                analysis={analyzeSugar(latestSugar?.sugar)}
+                             />
                              <StatCard title="น้ำหนัก" value={latestWeight ? latestWeight.weight : '-'} unit="kg" icon={Scale} colorClass="bg-blue-500" onClick={() => setActiveTab('stats')}/>
                         </div>
                         
@@ -661,85 +751,77 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     </div>
                 )}
                 
-                {activeTab === 'profile' && (
-                    <div className="space-y-6">
-                        <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-[32px] p-8 text-white text-center shadow-lg shadow-emerald-200 relative overflow-hidden">
-                             <div className="absolute top-0 right-0 opacity-10"><Shield size={180}/></div>
-                             <p className="text-emerald-100 text-sm mb-1 uppercase tracking-wider">Smart ID ของฉัน</p>
-                             <h1 className="text-5xl font-bold tracking-widest mb-4 font-mono">{profile?.shortId || '------'}</h1>
-                             <p className="text-xs bg-white/20 inline-block px-4 py-1 rounded-full backdrop-blur-sm">ใช้รหัสนี้เชื่อมต่อกับลูกหลาน</p>
-                        </div>
-                        
-                        <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><User className="text-emerald-500"/> ข้อมูลส่วนตัว</h3>
-                                <button onClick={() => { setFormProfile(profile); setShowEditProfile(true); }} className="text-slate-400 hover:text-emerald-600"><Edit2 size={18}/></button>
-                            </div>
-                            <div className="space-y-4">
-                                <div className="flex justify-between border-b border-slate-50 pb-3">
-                                    <span className="text-slate-400 text-sm">ชื่อ-สกุล</span>
-                                    <span className="font-bold text-slate-700">{profile?.name}</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-50 pb-3">
-                                    <span className="text-slate-400 text-sm">อายุ</span>
-                                    <span className="font-bold text-slate-700">{profile?.age || '-'} ปี</span>
-                                </div>
-                                <div className="flex justify-between border-b border-slate-50 pb-3">
-                                    <span className="text-slate-400 text-sm">โรคประจำตัว</span>
-                                    <span className="font-bold text-slate-700 text-right max-w-[60%] truncate">{profile?.diseases || '-'}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-slate-400 text-sm">แพ้ยา</span>
-                                    <span className="font-bold text-red-500 text-right max-w-[60%] truncate">{profile?.allergies || '-'}</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                             <div className="flex justify-between items-center mb-4 px-2">
-                                <h3 className="font-bold text-slate-700 text-lg">ลูกหลาน ({family.length})</h3>
-                                <button onClick={() => { setFormFamily({name:'',phone:'',relation:'ลูก'}); setEditFamilyId(null); setShowFamilyModal(true); }} className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100">+ เพิ่ม</button>
-                             </div>
-                             <div className="grid gap-3">
-                                {family.map(f => (
-                                    <div key={f.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center font-bold">{f.name.charAt(0)}</div>
-                                            <div>
-                                                <p className="font-bold text-slate-700">{f.name}</p>
-                                                <p className="text-xs text-slate-400">{f.relation}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            {f.phone && <a href={`tel:${f.phone}`} className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100"><Phone size={18}/></a>}
-                                            <button onClick={() => setDeleteConfirm({isOpen:true, collection:'family_members', id:f.id, title:f.name})} className="w-10 h-10 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500"><Trash2 size={18}/></button>
-                                        </div>
-                                    </div>
-                                ))}
-                             </div>
-                        </div>
-                        
-                        <button onClick={() => signOut(auth)} className="w-full py-4 text-red-400 font-bold bg-white rounded-2xl border border-red-50 hover:bg-red-50 transition-colors">ออกจากระบบ</button>
-                    </div>
-                )}
-                
                 {activeTab === 'stats' && (
                     <div className="space-y-6">
                         <h1 className="text-2xl font-bold text-slate-800 mb-4">สถิติสุขภาพ</h1>
-                        {/* Graphs would go here - simplified for this code block size */}
+                        
+                        {/* 4 Dashboard Boxes */}
+                        <div className="grid grid-cols-2 gap-3 mb-6">
+                            <StatCard title="ความดัน" value={latestBP ? `${latestBP.sys}/${latestBP.dia}` : '-'} unit="mmHg" icon={Heart} colorClass="bg-red-500" isActive={selectedStat === 'bp'} onClick={() => setSelectedStat('bp')}/>
+                            <StatCard title="น้ำตาล" value={latestSugar ? latestSugar.sugar : '-'} unit="mg/dL" icon={Droplet} colorClass="bg-orange-500" isActive={selectedStat === 'sugar'} onClick={() => setSelectedStat('sugar')}/>
+                            <StatCard title="น้ำหนัก" value={latestWeight ? latestWeight.weight : '-'} unit="kg" icon={Scale} colorClass="bg-blue-500" isActive={selectedStat === 'weight'} onClick={() => setSelectedStat('weight')}/>
+                            <StatCard title="ผลเลือด" value={latestLab ? (latestLab.hba1c || 'ล่าสุด') : '-'} unit="HbA1c" icon={TestTube} colorClass="bg-purple-500" isActive={selectedStat === 'lab'} onClick={() => setSelectedStat('lab')}/>
+                        </div>
+
+                        {/* Graphs & Logs Area */}
                         <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
-                             <h3 className="font-bold text-slate-700 mb-4">ความดันโลหิต (7 วันล่าสุด)</h3>
-                             <div className="h-64 w-full">
-                                <ResponsiveContainer>
-                                    <LineChart data={healthLogs.filter(l => l.type === 'bp').slice(-7)}>
-                                        <CartesianGrid stroke="#f1f5f9" vertical={false}/>
-                                        <XAxis dataKey="dateStr" tick={{fontSize:10}} tickFormatter={(val) => val.split('-')[2]} axisLine={false} tickLine={false}/>
-                                        <YAxis domain={[60, 180]} hide/>
-                                        <Tooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}/>
-                                        <Line type="monotone" dataKey="sys" stroke="#ef4444" strokeWidth={3} dot={{r:3}}/>
-                                        <Line type="monotone" dataKey="dia" stroke="#3b82f6" strokeWidth={3} dot={{r:3}}/>
-                                    </LineChart>
-                                </ResponsiveContainer>
+                             <div className="flex justify-between items-center mb-6">
+                                 <h3 className="font-bold text-slate-700 text-lg">
+                                     {selectedStat === 'bp' && 'กราฟความดันโลหิต'}
+                                     {selectedStat === 'sugar' && 'กราฟระดับน้ำตาล'}
+                                     {selectedStat === 'weight' && 'กราฟน้ำหนักตัว'}
+                                     {selectedStat === 'lab' && 'ประวัติผลเลือด'}
+                                 </h3>
+                                 <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">7 ครั้งล่าสุด</span>
+                             </div>
+                             
+                             {/* Chart */}
+                             {selectedStat !== 'lab' && (
+                                 <div className="h-64 w-full mb-8">
+                                    <ResponsiveContainer>
+                                        <LineChart data={healthLogs.filter(l => l.type === selectedStat).slice(-7)}>
+                                            <CartesianGrid stroke="#f1f5f9" vertical={false}/>
+                                            <XAxis dataKey="dateStr" tick={{fontSize:10}} tickFormatter={(val) => val.split('-')[2]} axisLine={false} tickLine={false}/>
+                                            <YAxis domain={['auto', 'auto']} hide/>
+                                            <Tooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}/>
+                                            {selectedStat === 'bp' ? (
+                                                <>
+                                                    <Line type="monotone" dataKey="sys" stroke="#ef4444" strokeWidth={3} dot={{r:3}}/>
+                                                    <Line type="monotone" dataKey="dia" stroke="#3b82f6" strokeWidth={3} dot={{r:3}}/>
+                                                </>
+                                            ) : (
+                                                <Line type="monotone" dataKey={selectedStat} stroke="#10b981" strokeWidth={3} dot={{r:3}}/>
+                                            )}
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                 </div>
+                             )}
+
+                             {/* Logs List with Notes */}
+                             <div className="space-y-4">
+                                <h4 className="font-bold text-slate-600 text-sm flex items-center gap-2"><List size={16}/> ประวัติรายการ</h4>
+                                {healthLogs.filter(l => l.type === selectedStat || (selectedStat === 'lab' && l.type === 'lab')).slice(-10).reverse().map((log) => (
+                                    <div key={log.id} className="border-b border-slate-50 pb-3 last:border-0">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{formatDateThai(log.dateStr)}</span>
+                                            <span className="font-bold text-slate-700 text-lg">
+                                                {selectedStat === 'bp' && `${log.sys}/${log.dia}`}
+                                                {selectedStat === 'sugar' && log.sugar}
+                                                {selectedStat === 'weight' && log.weight}
+                                                {selectedStat === 'lab' && `A1c: ${log.hba1c || '-'} / LDL: ${log.lipid || '-'}`}
+                                            </span>
+                                        </div>
+                                        {log.note && (
+                                            <div className="text-xs text-slate-500 bg-orange-50 p-2 rounded-lg mt-1 flex gap-2 items-start">
+                                                <FileText size={12} className="mt-0.5 text-orange-400 shrink-0"/>
+                                                {log.note}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                {healthLogs.filter(l => l.type === selectedStat || (selectedStat === 'lab' && l.type === 'lab')).length === 0 && (
+                                    <p className="text-center text-slate-300 text-sm py-4">ยังไม่มีข้อมูล</p>
+                                )}
                              </div>
                         </div>
                     </div>
@@ -756,38 +838,101 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             </div>
 
             {/* MODALS */}
+            {/* UPDATED: Health Input Modal with Grid Layout */}
             {showInputModal && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white w-full sm:max-w-sm rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
-                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6"></div>
-                        <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">บันทึกข้อมูลวันนี้</h2>
-                        <div className="grid grid-cols-4 gap-2 mb-6">
-                            {['bp','sugar','weight','lab'].map(t => (
-                                <button key={t} onClick={() => setInputType(t)} className={`py-3 rounded-2xl text-xs font-bold border transition-all ${inputType === t ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>
-                                    {t === 'bp' ? 'ความดัน' : t === 'sugar' ? 'น้ำตาล' : t === 'weight' ? 'น้ำหนัก' : 'ผลเลือด'}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="mb-6">
-                             {inputType === 'bp' && <div className="flex gap-4"><input type="number" placeholder="บน (120)" className="w-full p-4 bg-slate-50 rounded-2xl text-center text-xl font-bold border-2 border-transparent focus:border-emerald-500 outline-none" onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/><input type="number" placeholder="ล่าง (80)" className="w-full p-4 bg-slate-50 rounded-2xl text-center text-xl font-bold border-2 border-transparent focus:border-emerald-500 outline-none" onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/></div>}
-                             {inputType === 'sugar' && <input type="number" placeholder="ระดับน้ำตาล (mg/dL)" className="w-full p-4 bg-orange-50 text-orange-700 rounded-2xl text-center text-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none" onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>}
-                             {inputType === 'weight' && <input type="number" placeholder="น้ำหนัก (kg)" className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl text-center text-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>}
-                             {inputType === 'lab' && <div className="space-y-3"><input type="number" placeholder="HbA1c" className="w-full p-3 bg-slate-50 rounded-xl" onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/><input type="number" placeholder="ไขมัน (LDL)" className="w-full p-3 bg-slate-50 rounded-xl" onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/></div>}
+                    <div className="bg-white w-full sm:max-w-md rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto relative">
+                         {/* Close Button */}
+                         <button onClick={() => setShowInputModal(false)} className="absolute top-4 right-4 bg-slate-100 rounded-full p-2 text-slate-400 hover:bg-slate-200"><X size={20}/></button>
+                         
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-800">บันทึกข้อมูลวันนี้</h2>
+                            <p className="text-xs text-slate-400">{formatFullDateThai(new Date())}</p>
                         </div>
                         
-                        {/* Note Section (New) */}
-                        <div className="mb-6">
-                            <label className="text-xs font-bold text-slate-400 mb-2 block">อาการ / หมายเหตุ (ถ้ามี)</label>
-                            <textarea 
-                                className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-emerald-500 outline-none transition-all resize-none text-sm" 
-                                placeholder="เช่น เวียนหัว, นอนน้อย, กินเค็มมา..." 
-                                rows="2"
-                                onChange={e => setFormHealth({...formHealth, note: e.target.value})}
-                            ></textarea>
+                        <div className="space-y-4">
+                            {/* BP Section: Grid Layout 2 Columns */}
+                            <div className="p-4 rounded-2xl border border-slate-100 shadow-sm">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <div className="bg-red-50 p-1.5 rounded-lg text-red-500"><Heart size={18}/></div>
+                                    <span className="font-bold text-slate-700">ความดันโลหิต</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="relative">
+                                        <label className="text-[10px] text-slate-400 absolute top-2 left-3">SYS (บน)</label>
+                                        <input type="number" className="w-full pt-6 pb-2 px-3 bg-slate-50 rounded-xl text-center font-bold text-xl text-slate-700 outline-none border border-transparent focus:border-emerald-500 transition-all placeholder-slate-300" placeholder="120" value={formHealth.sys} onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/>
+                                    </div>
+                                    <div className="relative">
+                                        <label className="text-[10px] text-slate-400 absolute top-2 left-3">DIA (ล่าง)</label>
+                                        <input type="number" className="w-full pt-6 pb-2 px-3 bg-slate-50 rounded-xl text-center font-bold text-xl text-slate-700 outline-none border border-transparent focus:border-emerald-500 transition-all placeholder-slate-300" placeholder="80" value={formHealth.dia} onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Sugar & Weight Row: Grid Layout */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
+                                    <div className="flex items-center gap-1 mb-2 text-orange-500">
+                                        <Droplet size={16}/>
+                                        <span className="text-xs font-bold">น้ำตาล</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-1 w-full">
+                                        <input type="number" placeholder="-" className="w-full text-center font-bold text-xl text-slate-800 outline-none border-b border-slate-200 focus:border-orange-500 py-1" value={formHealth.sugar} onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>
+                                        <span className="text-[10px] text-slate-400">mg/dL</span>
+                                    </div>
+                                </div>
+                                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
+                                    <div className="flex items-center gap-1 mb-2 text-blue-500">
+                                        <Scale size={16}/>
+                                        <span className="text-xs font-bold">น้ำหนัก</span>
+                                    </div>
+                                    <div className="flex items-baseline gap-1 w-full">
+                                        <input type="number" placeholder="-" className="w-full text-center font-bold text-xl text-slate-800 outline-none border-b border-slate-200 focus:border-blue-500 py-1" value={formHealth.weight} onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>
+                                        <span className="text-[10px] text-slate-400">kg</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Lab Section: Compact Grid */}
+                            <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <TestTube size={16} className="text-purple-500"/>
+                                    <span className="font-bold text-slate-700 text-sm">ผลเลือด (ถ้ามี)</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="bg-white p-2 rounded-xl border border-slate-200">
+                                        <label className="text-[10px] text-slate-400 block text-center mb-1">HbA1c</label>
+                                        <input type="number" className="w-full text-center font-bold text-slate-700 outline-none" placeholder="-" value={formHealth.hba1c} onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/>
+                                    </div>
+                                    <div className="bg-white p-2 rounded-xl border border-slate-200">
+                                        <label className="text-[10px] text-slate-400 block text-center mb-1">LDL</label>
+                                        <input type="number" className="w-full text-center font-bold text-slate-700 outline-none" placeholder="-" value={formHealth.lipid} onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/>
+                                    </div>
+                                    <div className="bg-white p-2 rounded-xl border border-slate-200">
+                                        <label className="text-[10px] text-slate-400 block text-center mb-1">eGFR</label>
+                                        <input type="number" className="w-full text-center font-bold text-slate-700 outline-none" placeholder="-" value={formHealth.egfr} onChange={e => setFormHealth({...formHealth, egfr: e.target.value})}/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Note Section */}
+                            <div className="relative">
+                                <FileText size={16} className="absolute top-4 left-4 text-slate-400"/>
+                                <textarea 
+                                    className="w-full pl-10 pr-4 py-4 bg-slate-50 rounded-2xl border border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all resize-none text-sm text-slate-700" 
+                                    placeholder="มีอาการอะไรเป็นพิเศษไหม? (เช่น เวียนหัว, นอนน้อย)" 
+                                    rows="2"
+                                    value={formHealth.note}
+                                    onChange={e => setFormHealth({...formHealth, note: e.target.value})}
+                                ></textarea>
+                            </div>
                         </div>
 
-                        <button onClick={handleAddHealth} disabled={submitting} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200">{submitting ? <Loader2 className="animate-spin mx-auto"/> : 'บันทึก'}</button>
-                        <button onClick={() => setShowInputModal(false)} className="w-full py-4 text-slate-400 font-bold mt-2">ยกเลิก</button>
+                        <div className="mt-6">
+                            <button onClick={handleAddHealth} disabled={submitting} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all flex justify-center items-center gap-2">
+                                {submitting ? <Loader2 className="animate-spin"/> : <><Save size={20}/> บันทึกข้อมูล</>}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
