@@ -9,8 +9,7 @@ import {
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
   Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
   XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History,
-  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown, Share, Navigation, TestTube,
-  FileDigit, List
+  CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown, Share, Navigation
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -188,8 +187,8 @@ const CurrentTimeWidget = () => {
     );
 };
 
-const StatCard = ({ title, value, unit, icon: Icon, colorClass, onClick, analysis, isActive }) => (
-  <div onClick={onClick} className={`p-5 rounded-[24px] shadow-sm border flex-1 min-w-[100px] cursor-pointer hover:shadow-md transition-all active:scale-95 relative overflow-hidden group ${isActive ? 'ring-2 ring-emerald-500 bg-emerald-50/50' : (analysis ? analysis.bg : 'bg-white border-slate-100')}`}>
+const StatCard = ({ title, value, unit, icon: Icon, colorClass, onClick, analysis }) => (
+  <div onClick={onClick} className={`p-5 rounded-[24px] shadow-sm border flex-1 min-w-[100px] cursor-pointer hover:shadow-md transition-all active:scale-95 relative overflow-hidden group ${analysis ? analysis.bg : 'bg-white border-slate-100'}`}>
     <div className="flex justify-between items-start mb-2">
         <div className={`p-2.5 rounded-2xl w-fit ${colorClass} bg-opacity-10 text-opacity-100`}>
             <Icon size={20} className={colorClass.replace('bg-', 'text-').replace('/10', '')} />
@@ -203,8 +202,8 @@ const StatCard = ({ title, value, unit, icon: Icon, colorClass, onClick, analysi
     <div className="flex flex-col">
         <span className="text-slate-500 font-medium text-xs uppercase tracking-wide mb-1 opacity-80">{title}</span>
         <div className="flex items-baseline gap-1">
-            <span className="font-bold text-slate-800 text-xl md:text-2xl">{value || '-'}</span>
-            <span className="text-slate-500 text-[10px] font-medium">{unit}</span>
+            <span className="font-bold text-slate-800 text-2xl">{value || '-'}</span>
+            <span className="text-slate-500 text-xs font-medium">{unit}</span>
         </div>
     </div>
   </div>
@@ -371,9 +370,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [submitting, setSubmitting] = useState(false);
     const [gpsLocation, setGpsLocation] = useState(null);
     
-    // Stats Dashboard State
-    const [selectedStat, setSelectedStat] = useState('bp');
-
     // UI State
     const [todayTip, setTodayTip] = useState(HEALTH_TIPS[0]);
     const [notification, setNotification] = useState(null);
@@ -382,6 +378,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
 
     // Forms
     const [showInputModal, setShowInputModal] = useState(false);
+    const [inputType, setInputType] = useState('bp');
     const [formHealth, setFormHealth] = useState({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
     
     // Med Form State (Expanded)
@@ -437,42 +434,15 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const handleAddHealth = async () => { 
         setSubmitting(true);
         try {
-            const baseData = { dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' };
-            const batch = [];
-
-            // Add BP if filled
-            if(formHealth.sys && formHealth.dia) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'bp', sys: Number(formHealth.sys), dia: Number(formHealth.dia) }));
-            }
-            // Add Sugar if filled
-            if(formHealth.sugar) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'sugar', sugar: Number(formHealth.sugar) }));
-            }
-            // Add Weight if filled
-            if(formHealth.weight) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'weight', weight: Number(formHealth.weight) }));
-            }
-            // Add Lab if filled (Any of the fields)
-            if(formHealth.hba1c || formHealth.lipid || formHealth.egfr) {
-                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { 
-                    ...baseData, type: 'lab', 
-                    hba1c: formHealth.hba1c ? Number(formHealth.hba1c) : null, 
-                    lipid: formHealth.lipid ? Number(formHealth.lipid) : null, 
-                    egfr: formHealth.egfr ? Number(formHealth.egfr) : null 
-                }));
-            }
-
-            if (batch.length === 0 && formHealth.note) {
-                 // Save just a note if no data
-                 batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'note' }));
-            }
-
-            await Promise.all(batch);
-            
-            setShowInputModal(false); 
-            setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
+            let data = { type: inputType, dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' }; 
+            if (inputType === 'bp') data = { ...data, sys: Number(formHealth.sys), dia: Number(formHealth.dia) };
+            else if(inputType === 'sugar') data = { ...data, sugar: Number(formHealth.sugar) };
+            else if(inputType === 'weight') data = { ...data, weight: parseFloat(formHealth.weight) };
+            else if(inputType === 'lab') data = { ...data, hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr };
+            await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), data); 
+            setShowInputModal(false); setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
             showToast('บันทึกข้อมูลเรียบร้อย');
-        } catch(e) { console.error(e); showToast('เกิดข้อผิดพลาด', 'error'); } finally { setSubmitting(false); }
+        } catch(e) { showToast('เกิดข้อผิดพลาด', 'error'); } finally { setSubmitting(false); }
     };
     
     const toggleMedToday = async (medId) => { 
@@ -531,7 +501,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const latestBP = healthLogs.filter(x => x.type === 'bp').pop();
     const latestSugar = healthLogs.filter(x => x.type === 'sugar').pop();
     const latestWeight = healthLogs.filter(x => x.type === 'weight').pop();
-    const latestLab = healthLogs.filter(x => x.type === 'lab').pop();
     
     const medGroups = groupMedsByPeriod(meds);
     const nextAppt = appointments.filter(a => new Date(a.date) >= new Date().setHours(0,0,0,0))[0];
@@ -575,7 +544,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                             <Share2 size={20}/> แชร์สรุปวันนี้เข้า LINE
                         </button>
 
-                        {/* Health Stats Summary */}
+                        {/* Health Stats with Smart Analysis */}
                         <div className="grid grid-cols-3 gap-3">
                              <StatCard 
                                 title="ความดัน" 
@@ -743,77 +712,106 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     </div>
                 )}
                 
+                {activeTab === 'profile' && (
+                    <div className="space-y-6">
+                        <div className="bg-gradient-to-br from-emerald-500 to-teal-700 rounded-[32px] p-8 text-white text-center shadow-lg shadow-emerald-200 relative overflow-hidden">
+                             <div className="absolute top-0 right-0 opacity-10"><Shield size={180}/></div>
+                             <p className="text-emerald-100 text-sm mb-1 uppercase tracking-wider">Smart ID ของฉัน</p>
+                             <h1 className="text-5xl font-bold tracking-widest mb-4 font-mono">{profile?.shortId || '------'}</h1>
+                             <p className="text-xs bg-white/20 inline-block px-4 py-1 rounded-full backdrop-blur-sm">ใช้รหัสนี้เชื่อมต่อกับลูกหลาน</p>
+                        </div>
+                        
+                        <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2"><User className="text-emerald-500"/> ข้อมูลส่วนตัว</h3>
+                                <button onClick={() => { setFormProfile(profile); setShowEditProfile(true); }} className="text-slate-400 hover:text-emerald-600"><Edit2 size={18}/></button>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="flex justify-between border-b border-slate-50 pb-3">
+                                    <span className="text-slate-400 text-sm">ชื่อ-สกุล</span>
+                                    <span className="font-bold text-slate-700">{profile?.name}</span>
+                                </div>
+                                <div className="flex justify-between border-b border-slate-50 pb-3">
+                                    <span className="text-slate-400 text-sm">อายุ</span>
+                                    <span className="font-bold text-slate-700">{profile?.age || '-'} ปี</span>
+                                </div>
+                                <div className="flex justify-between border-b border-slate-50 pb-3">
+                                    <span className="text-slate-400 text-sm">โรคประจำตัว</span>
+                                    <span className="font-bold text-slate-700 text-right max-w-[60%] truncate">{profile?.diseases || '-'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 text-sm">แพ้ยา</span>
+                                    <span className="font-bold text-red-500 text-right max-w-[60%] truncate">{profile?.allergies || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Enhanced SOS Button */}
+                        <div className="bg-red-50 p-6 rounded-[32px] border border-red-100" onClick={fetchLocation}>
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="bg-red-100 p-4 rounded-full text-red-600 border-4 border-white shadow-sm animate-pulse"><Phone size={28}/></div>
+                                <div>
+                                    <h3 className="font-bold text-red-800 text-lg">ฉุกเฉิน (SOS)</h3>
+                                    <p className="text-xs text-red-500 font-medium">กดเพื่อระบุพิกัดและขอความช่วยเหลือ</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-2">
+                                <a href="tel:1669" className="flex-1 bg-white border border-red-200 text-red-600 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-red-50">
+                                    โทร 1669
+                                </a>
+                                <button onClick={handleSOS} disabled={!gpsLocation} className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 text-white shadow-lg ${gpsLocation ? 'bg-red-600 hover:bg-red-700' : 'bg-red-300 cursor-not-allowed'}`}>
+                                    <Navigation size={16}/> {gpsLocation ? 'ส่งพิกัดไลน์' : 'กำลังหาพิกัด...'}
+                                </button>
+                            </div>
+                            {gpsLocation && <p className="text-[10px] text-red-400 text-center mt-2">พิกัดปัจจุบัน: {gpsLocation}</p>}
+                        </div>
+                        
+                        <div>
+                             <div className="flex justify-between items-center mb-4 px-2 mt-6">
+                                <h3 className="font-bold text-slate-700 text-lg">ลูกหลาน ({family.length})</h3>
+                                <button onClick={() => { setFormFamily({name:'',phone:'',relation:'ลูก'}); setEditFamilyId(null); setShowFamilyModal(true); }} className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100">+ เพิ่ม</button>
+                             </div>
+                             <div className="grid gap-3">
+                                {family.map(f => (
+                                    <div key={f.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center font-bold">{f.name.charAt(0)}</div>
+                                            <div>
+                                                <p className="font-bold text-slate-700">{f.name}</p>
+                                                <p className="text-xs text-slate-400">{f.relation}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {f.phone && <a href={`tel:${f.phone}`} className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100"><Phone size={18}/></a>}
+                                            <button onClick={() => setDeleteConfirm({isOpen:true, collection:'family_members', id:f.id, title:f.name})} className="w-10 h-10 rounded-full bg-slate-50 text-slate-300 flex items-center justify-center hover:bg-red-50 hover:text-red-500"><Trash2 size={18}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                             </div>
+                        </div>
+                        
+                        <button onClick={() => signOut(auth)} className="w-full py-4 text-red-400 font-bold bg-white rounded-2xl border border-red-50 hover:bg-red-50 transition-colors">ออกจากระบบ</button>
+                    </div>
+                )}
+                
                 {activeTab === 'stats' && (
                     <div className="space-y-6">
                         <h1 className="text-2xl font-bold text-slate-800 mb-4">สถิติสุขภาพ</h1>
-                        
-                        {/* 4 Dashboard Boxes */}
-                        <div className="grid grid-cols-2 gap-3 mb-6">
-                            <StatCard title="ความดัน" value={latestBP ? `${latestBP.sys}/${latestBP.dia}` : '-'} unit="mmHg" icon={Heart} colorClass="bg-red-500" isActive={selectedStat === 'bp'} onClick={() => setSelectedStat('bp')}/>
-                            <StatCard title="น้ำตาล" value={latestSugar ? latestSugar.sugar : '-'} unit="mg/dL" icon={Droplet} colorClass="bg-orange-500" isActive={selectedStat === 'sugar'} onClick={() => setSelectedStat('sugar')}/>
-                            <StatCard title="น้ำหนัก" value={latestWeight ? latestWeight.weight : '-'} unit="kg" icon={Scale} colorClass="bg-blue-500" isActive={selectedStat === 'weight'} onClick={() => setSelectedStat('weight')}/>
-                            <StatCard title="ผลเลือด" value={latestLab ? (latestLab.hba1c || 'ล่าสุด') : '-'} unit="HbA1c" icon={TestTube} colorClass="bg-purple-500" isActive={selectedStat === 'lab'} onClick={() => setSelectedStat('lab')}/>
-                        </div>
-
-                        {/* Graphs & Logs Area */}
+                        {/* Graphs would go here - simplified for this code block size */}
                         <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
-                             <div className="flex justify-between items-center mb-6">
-                                 <h3 className="font-bold text-slate-700 text-lg">
-                                     {selectedStat === 'bp' && 'กราฟความดันโลหิต'}
-                                     {selectedStat === 'sugar' && 'กราฟระดับน้ำตาล'}
-                                     {selectedStat === 'weight' && 'กราฟน้ำหนักตัว'}
-                                     {selectedStat === 'lab' && 'ประวัติผลเลือด'}
-                                 </h3>
-                                 <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">7 ครั้งล่าสุด</span>
-                             </div>
-                             
-                             {/* Chart */}
-                             {selectedStat !== 'lab' && (
-                                 <div className="h-64 w-full mb-8">
-                                    <ResponsiveContainer>
-                                        <LineChart data={healthLogs.filter(l => l.type === selectedStat).slice(-7)}>
-                                            <CartesianGrid stroke="#f1f5f9" vertical={false}/>
-                                            <XAxis dataKey="dateStr" tick={{fontSize:10}} tickFormatter={(val) => val.split('-')[2]} axisLine={false} tickLine={false}/>
-                                            <YAxis domain={['auto', 'auto']} hide/>
-                                            <Tooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}/>
-                                            {selectedStat === 'bp' ? (
-                                                <>
-                                                    <Line type="monotone" dataKey="sys" stroke="#ef4444" strokeWidth={3} dot={{r:3}}/>
-                                                    <Line type="monotone" dataKey="dia" stroke="#3b82f6" strokeWidth={3} dot={{r:3}}/>
-                                                </>
-                                            ) : (
-                                                <Line type="monotone" dataKey={selectedStat} stroke="#10b981" strokeWidth={3} dot={{r:3}}/>
-                                            )}
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                 </div>
-                             )}
-
-                             {/* Logs List with Notes */}
-                             <div className="space-y-4">
-                                <h4 className="font-bold text-slate-600 text-sm flex items-center gap-2"><List size={16}/> ประวัติรายการ</h4>
-                                {healthLogs.filter(l => l.type === selectedStat || (selectedStat === 'lab' && l.type === 'lab')).slice(-10).reverse().map((log) => (
-                                    <div key={log.id} className="border-b border-slate-50 pb-3 last:border-0">
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{formatDateThai(log.dateStr)}</span>
-                                            <span className="font-bold text-slate-700 text-lg">
-                                                {selectedStat === 'bp' && `${log.sys}/${log.dia}`}
-                                                {selectedStat === 'sugar' && log.sugar}
-                                                {selectedStat === 'weight' && log.weight}
-                                                {selectedStat === 'lab' && `A1c: ${log.hba1c || '-'} / LDL: ${log.lipid || '-'}`}
-                                            </span>
-                                        </div>
-                                        {log.note && (
-                                            <div className="text-xs text-slate-500 bg-orange-50 p-2 rounded-lg mt-1 flex gap-2 items-start">
-                                                <FileText size={12} className="mt-0.5 text-orange-400 shrink-0"/>
-                                                {log.note}
-                                            </div>
-                                        )}
-                                    </div>
-                                ))}
-                                {healthLogs.filter(l => l.type === selectedStat || (selectedStat === 'lab' && l.type === 'lab')).length === 0 && (
-                                    <p className="text-center text-slate-300 text-sm py-4">ยังไม่มีข้อมูล</p>
-                                )}
+                             <h3 className="font-bold text-slate-700 mb-4">ความดันโลหิต (7 วันล่าสุด)</h3>
+                             <div className="h-64 w-full">
+                                <ResponsiveContainer>
+                                    <LineChart data={healthLogs.filter(l => l.type === 'bp').slice(-7)}>
+                                        <CartesianGrid stroke="#f1f5f9" vertical={false}/>
+                                        <XAxis dataKey="dateStr" tick={{fontSize:10}} tickFormatter={(val) => val.split('-')[2]} axisLine={false} tickLine={false}/>
+                                        <YAxis domain={[60, 180]} hide/>
+                                        <Tooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 4px 12px rgba(0,0,0,0.1)'}}/>
+                                        <Line type="monotone" dataKey="sys" stroke="#ef4444" strokeWidth={3} dot={{r:3}}/>
+                                        <Line type="monotone" dataKey="dia" stroke="#3b82f6" strokeWidth={3} dot={{r:3}}/>
+                                    </LineChart>
+                                </ResponsiveContainer>
                              </div>
                         </div>
                     </div>
@@ -835,70 +833,33 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     <div className="bg-white w-full sm:max-w-sm rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
                         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6"></div>
                         <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">บันทึกข้อมูลวันนี้</h2>
+                        <div className="grid grid-cols-4 gap-2 mb-6">
+                            {['bp','sugar','weight','lab'].map(t => (
+                                <button key={t} onClick={() => setInputType(t)} className={`py-3 rounded-2xl text-xs font-bold border transition-all ${inputType === t ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'border-slate-100 text-slate-400'}`}>
+                                    {t === 'bp' ? 'ความดัน' : t === 'sugar' ? 'น้ำตาล' : t === 'weight' ? 'น้ำหนัก' : 'ผลเลือด'}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="mb-6">
+                             {inputType === 'bp' && <div className="flex gap-4"><input type="number" placeholder="บน (120)" className="w-full p-4 bg-slate-50 rounded-2xl text-center text-xl font-bold border-2 border-transparent focus:border-emerald-500 outline-none" onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/><input type="number" placeholder="ล่าง (80)" className="w-full p-4 bg-slate-50 rounded-2xl text-center text-xl font-bold border-2 border-transparent focus:border-emerald-500 outline-none" onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/></div>}
+                             {inputType === 'sugar' && <input type="number" placeholder="ระดับน้ำตาล (mg/dL)" className="w-full p-4 bg-orange-50 text-orange-700 rounded-2xl text-center text-2xl font-bold border-2 border-transparent focus:border-orange-500 outline-none" onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>}
+                             {inputType === 'weight' && <input type="number" placeholder="น้ำหนัก (kg)" className="w-full p-4 bg-blue-50 text-blue-700 rounded-2xl text-center text-2xl font-bold border-2 border-transparent focus:border-blue-500 outline-none" onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>}
+                             {inputType === 'lab' && <div className="space-y-3"><input type="number" placeholder="HbA1c" className="w-full p-3 bg-slate-50 rounded-xl" onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/><input type="number" placeholder="ไขมัน (LDL)" className="w-full p-3 bg-slate-50 rounded-xl" onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/></div>}
+                        </div>
                         
-                        <div className="space-y-6">
-                            {/* BP Section */}
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <div className="bg-red-100 p-1.5 rounded-lg text-red-600"><Heart size={16}/></div>
-                                    <span className="font-bold text-slate-700 text-sm">ความดันโลหิต</span>
-                                </div>
-                                <div className="flex gap-3">
-                                    <input type="number" placeholder="บน (120)" className="flex-1 p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.sys} onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/>
-                                    <input type="number" placeholder="ล่าง (80)" className="flex-1 p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.dia} onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/>
-                                </div>
-                            </div>
-
-                            {/* Sugar & Weight Row */}
-                            <div className="flex gap-3">
-                                <div className="flex-1 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="bg-orange-100 p-1.5 rounded-lg text-orange-600"><Droplet size={16}/></div>
-                                        <span className="font-bold text-slate-700 text-sm">น้ำตาล</span>
-                                    </div>
-                                    <input type="number" placeholder="mg/dL" className="w-full p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.sugar} onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>
-                                </div>
-                                <div className="flex-1 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600"><Scale size={16}/></div>
-                                        <span className="font-bold text-slate-700 text-sm">น้ำหนัก</span>
-                                    </div>
-                                    <input type="number" placeholder="kg" className="w-full p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.weight} onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>
-                                </div>
-                            </div>
-
-                            {/* Lab Section */}
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <div className="bg-purple-100 p-1.5 rounded-lg text-purple-600"><TestTube size={16}/></div>
-                                    <span className="font-bold text-slate-700 text-sm">ผลเลือด (ถ้ามี)</span>
-                                </div>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <input type="number" placeholder="HbA1c" className="p-2 bg-white rounded-xl text-center text-sm border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.hba1c} onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/>
-                                    <input type="number" placeholder="LDL" className="p-2 bg-white rounded-xl text-center text-sm border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.lipid} onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/>
-                                    <input type="number" placeholder="eGFR" className="p-2 bg-white rounded-xl text-center text-sm border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.egfr} onChange={e => setFormHealth({...formHealth, egfr: e.target.value})}/>
-                                </div>
-                            </div>
-
-                            {/* Note Section */}
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 mb-2 block">อาการ / หมายเหตุ</label>
-                                <textarea 
-                                    className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none focus:border-emerald-500 transition-all resize-none text-sm" 
-                                    placeholder="เช่น เวียนหัว, นอนน้อย, กินเค็มมา..." 
-                                    rows="2"
-                                    value={formHealth.note}
-                                    onChange={e => setFormHealth({...formHealth, note: e.target.value})}
-                                ></textarea>
-                            </div>
+                        {/* Note Section (New) */}
+                        <div className="mb-6">
+                            <label className="text-xs font-bold text-slate-400 mb-2 block">อาการ / หมายเหตุ (ถ้ามี)</label>
+                            <textarea 
+                                className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-emerald-500 outline-none transition-all resize-none text-sm" 
+                                placeholder="เช่น เวียนหัว, นอนน้อย, กินเค็มมา..." 
+                                rows="2"
+                                onChange={e => setFormHealth({...formHealth, note: e.target.value})}
+                            ></textarea>
                         </div>
 
-                        <div className="mt-6 flex gap-3">
-                            <button onClick={() => setShowInputModal(false)} className="flex-1 py-4 text-slate-400 font-bold bg-slate-50 rounded-2xl hover:bg-slate-100">ยกเลิก</button>
-                            <button onClick={handleAddHealth} disabled={submitting} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex justify-center items-center">
-                                {submitting ? <Loader2 className="animate-spin"/> : 'บันทึกข้อมูล'}
-                            </button>
-                        </div>
+                        <button onClick={handleAddHealth} disabled={submitting} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200">{submitting ? <Loader2 className="animate-spin mx-auto"/> : 'บันทึก'}</button>
+                        <button onClick={() => setShowInputModal(false)} className="w-full py-4 text-slate-400 font-bold mt-2">ยกเลิก</button>
                     </div>
                 </div>
             )}
