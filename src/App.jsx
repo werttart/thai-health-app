@@ -293,7 +293,8 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, collection: null, id: null, title: '' });
     
     // Permission check: Can this user edit data?
-    const canEdit = currentUserRole === 'patient';
+    // Edited: Allow both patient AND caregiver to edit
+    const canEdit = currentUserRole === 'patient' || currentUserRole === 'caregiver';
 
     useEffect(() => {
         if (!targetUid) return;
@@ -441,7 +442,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     {currentUserRole === 'caregiver' && <button onClick={onBack} className="bg-slate-100 p-3 rounded-2xl hover:bg-slate-200 transition-colors"><ChevronLeft className="text-slate-600"/></button>}
                     <div>
                         <h1 className={`font-bold text-slate-800 ${fontSize === 'large' ? 'text-2xl' : 'text-xl'}`}>{profile?.name || '...'}</h1>
-                        <p className="text-slate-400 text-xs font-medium">{currentUserRole === 'caregiver' ? 'โหมดผู้ดูแล (View Mode)' : 'ดูแลสุขภาพตัวเอง'}</p>
+                        <p className="text-slate-400 text-xs font-medium">{currentUserRole === 'caregiver' ? 'โหมดผู้ดูแล' : 'ดูแลสุขภาพตัวเอง'}</p>
                     </div>
                 </div>
                 <div className="flex gap-2">
