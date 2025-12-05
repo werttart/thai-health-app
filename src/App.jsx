@@ -8,7 +8,7 @@ import {
   Send, QrCode, MapPin, Loader2, Scale, Droplet,
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
   Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
-  XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map
+  XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -43,6 +43,16 @@ const getTodayStr = () => {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const getPast7Days = () => {
+    const days = [];
+    for(let i=0; i<7; i++) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+    }
+    return days;
+};
+
 const formatDateThai = (dateStr) => {
     if(!dateStr) return '';
     const date = new Date(dateStr);
@@ -74,15 +84,17 @@ const groupMedsByPeriod = (meds) => {
     };
     
     meds.forEach(med => {
-        if (med.period && groups[med.period]) {
-            groups[med.period].push(med);
+        // Normalize period check
+        const p = med.period || 'อื่นๆ';
+        if (groups[p]) {
+            groups[p].push(med);
         } else {
-            // Backward compatibility or default
-            if (med.time.includes('เช้า')) groups['เช้า'].push(med);
-            else if (med.time.includes('เที่ยง') || med.time.includes('กลางวัน')) groups['กลางวัน'].push(med);
-            else if (med.time.includes('เย็น')) groups['เย็น'].push(med);
-            else if (med.time.includes('นอน')) groups['ก่อนนอน'].push(med);
-            else groups['อื่นๆ'].push(med);
+             // Fallback for old data or specific times
+             if (med.time && med.time.includes('เช้า')) groups['เช้า'].push(med);
+             else if (med.time && med.time.includes('เที่ยง')) groups['กลางวัน'].push(med);
+             else if (med.time && med.time.includes('เย็น')) groups['เย็น'].push(med);
+             else if (med.time && med.time.includes('นอน')) groups['ก่อนนอน'].push(med);
+             else groups['อื่นๆ'].push(med);
         }
     });
     return groups;
@@ -182,22 +194,30 @@ const MedicineGroup = ({ title, icon: Icon, meds, medHistory, toggleMed, canEdit
                 {meds.map(med => {
                     const isTaken = (medHistory?.takenMeds || []).includes(med.id);
                     return (
-                        <div key={med.id} className={`flex items-center justify-between p-4 rounded-3xl border transition-all duration-300 ${isTaken ? 'bg-emerald-50/80 border-emerald-200' : 'bg-white border-slate-100 shadow-sm hover:shadow-md'}`}>
-                            <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => canEdit && toggleMed(med.id)}>
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isTaken ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                    {isTaken ? <Check size={24} strokeWidth={3}/> : <Pill size={24}/>}
+                        <div key={med.id} onClick={() => canEdit && toggleMed(med.id)} className={`flex items-center justify-between p-4 rounded-3xl border transition-all duration-300 cursor-pointer ${isTaken ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100 shadow-sm hover:shadow-md'}`}>
+                            <div className="flex items-center gap-4 flex-1">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isTaken ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                                    <Pill size={24}/>
                                 </div>
                                 <div>
-                                    <h4 className={`font-bold text-lg ${isTaken ? 'text-emerald-800' : 'text-slate-700'}`}>{med.name}</h4>
+                                    <h4 className={`font-bold text-lg ${isTaken ? 'text-emerald-800 line-through opacity-70' : 'text-slate-700'}`}>{med.name}</h4>
                                     <p className="text-xs text-slate-400">{med.dose || '1 หน่วย'} • {med.detail || 'ก่อนอาหาร'}</p>
                                 </div>
                             </div>
-                            {canEdit && (onEdit || onDelete) && (
-                                <div className="flex gap-1">
-                                     <button onClick={(e) => { e.stopPropagation(); onEdit(med); }} className="p-2 text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-full"><Edit2 size={18}/></button>
-                                     <button onClick={(e) => { e.stopPropagation(); onDelete(med.id, med.name); }} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={18}/></button>
+                            
+                            {/* Checklist Button */}
+                            <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isTaken ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 bg-white'}`}>
+                                    {isTaken && <Check size={16} className="text-white" strokeWidth={4}/>}
                                 </div>
-                            )}
+                                
+                                {canEdit && !isTaken && (onEdit || onDelete) && (
+                                    <div className="flex gap-1 ml-2 border-l pl-2 border-slate-100">
+                                        <button onClick={(e) => { e.stopPropagation(); onEdit(med); }} className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-full"><Edit2 size={16}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(med.id, med.name); }} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full"><Trash2 size={16}/></button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     );
                 })}
@@ -414,6 +434,12 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     
     const medGroups = groupMedsByPeriod(meds);
     const nextAppt = appointments.filter(a => new Date(a.date) >= new Date().setHours(0,0,0,0))[0];
+    const past7Days = getPast7Days();
+
+    // Summary of meds taken today
+    const totalMeds = meds.length;
+    const takenMedsTodayCount = (medHistory[getTodayStr()]?.takenMeds || []).length;
+    const progressPercent = totalMeds > 0 ? (takenMedsTodayCount / totalMeds) * 100 : 0;
 
     if (loading) return <div className="h-screen flex flex-col gap-4 items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-emerald-600" size={48}/><p className="text-slate-400 font-medium">กำลังโหลดข้อมูล...</p></div>;
 
@@ -448,6 +474,19 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                              <StatCard title="น้ำตาล" value={latestSugar ? latestSugar.sugar : '-'} rawValue={latestSugar?.sugar} statusType="sugar" unit="mg/dL" icon={Droplet} colorClass="bg-orange-500" onClick={() => setActiveTab('stats')}/>
                              <StatCard title="น้ำหนัก" value={latestWeight ? latestWeight.weight : '-'} unit="kg" icon={Scale} colorClass="bg-blue-500" onClick={() => setActiveTab('stats')}/>
                         </div>
+                        
+                        {/* Daily Progress */}
+                        {meds.length > 0 && (
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-bold text-slate-500">ความคืบหน้าการกินยาวันนี้</span>
+                                    <span className="text-xs font-bold text-emerald-600">{takenMedsTodayCount} / {totalMeds} ตัว</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500 transition-all duration-500 ease-out" style={{width: `${progressPercent}%`}}></div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Next Appointment Teaser */}
                         {nextAppt && (
@@ -482,6 +521,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                     <MedicineGroup title="ช่วงกลางวัน (11:00 - 15:00)" icon={Sun} meds={medGroups['กลางวัน']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
                                     <MedicineGroup title="ช่วงเย็น (16:00 - 20:00)" icon={Sunset} meds={medGroups['เย็น']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
                                     <MedicineGroup title="ก่อนนอน" icon={Moon} meds={medGroups['ก่อนนอน']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />
+                                    {medGroups['อื่นๆ'].length > 0 && <MedicineGroup title="อื่นๆ / ทั่วไป" icon={Pill} meds={medGroups['อื่นๆ']} medHistory={medHistory} toggleMed={toggleMedToday} canEdit={canEdit} onEdit={(m) => {setFormMed(m); setEditMedId(m.id); setShowMedModal(true)}} onDelete={(id,n) => setDeleteConfirm({isOpen:true, collection:'medications', id, title:n})} />}
                                 </>
                             )}
                         </div>
@@ -490,50 +530,82 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
 
                 {activeTab === 'care' && (
                     <div className="space-y-6">
-                        <div className="flex justify-between items-center">
-                             <h1 className="text-2xl font-bold text-slate-800">ปฏิทินหมอนัด</h1>
-                             {canEdit && <button onClick={() => { setFormAppt({date:'',time:'',location:'',dept:''}); setEditApptId(null); setShowApptModal(true); }} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all">+ เพิ่มนัด</button>}
+                        {/* Appointment Section */}
+                        <div>
+                             <div className="flex justify-between items-center mb-4">
+                                 <h1 className="text-2xl font-bold text-slate-800">ปฏิทินหมอนัด</h1>
+                                 {canEdit && <button onClick={() => { setFormAppt({date:'',time:'',location:'',dept:''}); setEditApptId(null); setShowApptModal(true); }} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all">+ เพิ่มนัด</button>}
+                             </div>
+                             
+                             {appointments.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-8 text-slate-400 bg-white rounded-[32px] border border-slate-100">
+                                    <CalendarIcon size={32} className="mb-2 text-slate-200"/>
+                                    <p className="text-sm">ไม่มีนัดหมายเร็วๆ นี้</p>
+                                </div>
+                             ) : (
+                                <div className="space-y-4">
+                                    {appointments.map(a => {
+                                        const isPast = new Date(a.date) < new Date().setHours(0,0,0,0);
+                                        return (
+                                            <div key={a.id} className={`p-6 rounded-[32px] border ${isPast ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-100 shadow-sm hover:shadow-md transition-all'}`}>
+                                                <div className="flex gap-4">
+                                                    <div className={`flex flex-col items-center justify-center p-3 rounded-2xl min-w-[70px] h-[80px] ${isPast ? 'bg-slate-200 text-slate-500' : 'bg-orange-50 text-orange-600'}`}>
+                                                        <span className="text-xs font-bold uppercase">{new Date(a.date).toLocaleString('th-TH', { month: 'short' })}</span>
+                                                        <span className="text-2xl font-bold">{new Date(a.date).getDate()}</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className="flex justify-between items-start">
+                                                            <h3 className="font-bold text-lg text-slate-800">{a.location}</h3>
+                                                            {canEdit && (
+                                                                <div className="flex gap-2">
+                                                                    <button onClick={() => { setFormAppt(a); setEditApptId(a.id); setShowApptModal(true); }}><Edit2 size={16} className="text-slate-300 hover:text-emerald-500"/></button>
+                                                                    <button onClick={() => setDeleteConfirm({isOpen:true, collection:'appointments', id:a.id, title:'นัดหมาย'})}><Trash2 size={16} className="text-slate-300 hover:text-red-500"/></button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-slate-500 text-sm mb-2">{a.dept}</p>
+                                                        <div className="flex flex-wrap gap-2 text-xs font-medium">
+                                                            <span className="bg-slate-100 px-2 py-1 rounded-lg text-slate-500 flex items-center gap-1"><Clock size={12}/> {a.time} น.</span>
+                                                            {a.doctor && <span className="bg-blue-50 px-2 py-1 rounded-lg text-blue-600 flex items-center gap-1"><Stethoscope size={12}/> {a.doctor}</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                             )}
                         </div>
                         
-                        {appointments.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-white rounded-[32px] border border-slate-100">
-                                <CalendarIcon size={48} className="mb-4 text-slate-200"/>
-                                <p>ไม่มีนัดหมายเร็วๆ นี้</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {appointments.map(a => {
-                                    const isPast = new Date(a.date) < new Date().setHours(0,0,0,0);
+                        {/* History Section */}
+                        <div className="mt-8">
+                            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><History className="text-indigo-500"/> ประวัติการกินยา (7 วัน)</h2>
+                            <div className="bg-white rounded-[32px] border border-slate-100 overflow-hidden shadow-sm">
+                                {past7Days.map((dateStr, index) => {
+                                    const log = medHistory[dateStr];
+                                    const count = log?.takenMeds?.length || 0;
+                                    const allTaken = totalMeds > 0 && count >= totalMeds;
+                                    const isToday = dateStr === getTodayStr();
+                                    
                                     return (
-                                        <div key={a.id} className={`p-6 rounded-[32px] border ${isPast ? 'bg-slate-50 border-slate-100 opacity-60' : 'bg-white border-slate-100 shadow-sm hover:shadow-md transition-all'}`}>
-                                            <div className="flex gap-4">
-                                                <div className={`flex flex-col items-center justify-center p-3 rounded-2xl min-w-[70px] h-[80px] ${isPast ? 'bg-slate-200 text-slate-500' : 'bg-orange-50 text-orange-600'}`}>
-                                                    <span className="text-xs font-bold uppercase">{new Date(a.date).toLocaleString('th-TH', { month: 'short' })}</span>
-                                                    <span className="text-2xl font-bold">{new Date(a.date).getDate()}</span>
+                                        <div key={dateStr} className={`flex justify-between items-center p-4 ${index !== past7Days.length - 1 ? 'border-b border-slate-50' : ''} ${isToday ? 'bg-indigo-50/50' : ''}`}>
+                                            <div>
+                                                <p className="font-bold text-slate-700">{formatDateThai(dateStr)} {isToday && <span className="text-xs text-indigo-500 bg-indigo-100 px-2 py-0.5 rounded-full ml-1">วันนี้</span>}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="text-right">
+                                                    <p className={`text-sm font-bold ${allTaken ? 'text-emerald-600' : 'text-slate-600'}`}>{count} / {totalMeds} รายการ</p>
                                                 </div>
-                                                <div className="flex-1">
-                                                    <div className="flex justify-between items-start">
-                                                        <h3 className="font-bold text-lg text-slate-800">{a.location}</h3>
-                                                        {canEdit && (
-                                                            <div className="flex gap-2">
-                                                                <button onClick={() => { setFormAppt(a); setEditApptId(a.id); setShowApptModal(true); }}><Edit2 size={16} className="text-slate-300 hover:text-emerald-500"/></button>
-                                                                <button onClick={() => setDeleteConfirm({isOpen:true, collection:'appointments', id:a.id, title:'นัดหมาย'})}><Trash2 size={16} className="text-slate-300 hover:text-red-500"/></button>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-slate-500 text-sm mb-2">{a.dept}</p>
-                                                    <div className="flex flex-wrap gap-2 text-xs font-medium">
-                                                        <span className="bg-slate-100 px-2 py-1 rounded-lg text-slate-500 flex items-center gap-1"><Clock size={12}/> {a.time} น.</span>
-                                                        {a.doctor && <span className="bg-blue-50 px-2 py-1 rounded-lg text-blue-600 flex items-center gap-1"><Stethoscope size={12}/> {a.doctor}</span>}
-                                                    </div>
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${allTaken ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-300'}`}>
+                                                    {allTaken ? <Check size={16}/> : <span className="text-xs font-bold">{Math.round((count/totalMeds)*100)}%</span>}
                                                 </div>
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
-                        )}
-                        
+                        </div>
+
                         <div className="bg-emerald-50 p-6 rounded-[32px] border border-emerald-100">
                              <div className="flex items-center gap-3 mb-3">
                                  <div className="bg-white p-2 rounded-full text-emerald-600"><Lightbulb size={20}/></div>
@@ -672,7 +744,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                             <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500" placeholder="ขนาด (เช่น 1 เม็ด)" value={formMed.dose || ''} onChange={e => setFormMed({...formMed, dose: e.target.value})}/>
                             <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none border focus:border-emerald-500" placeholder="รายละเอียด (เช่น หลังอาหาร)" value={formMed.detail || ''} onChange={e => setFormMed({...formMed, detail: e.target.value})}/>
                             <div className="grid grid-cols-2 gap-2">
-                                {['เช้า','กลางวัน','เย็น','ก่อนนอน'].map(p => (
+                                {['เช้า','กลางวัน','เย็น','ก่อนนอน','อื่นๆ'].map(p => (
                                     <button key={p} onClick={() => setFormMed({...formMed, period: p})} className={`p-2 rounded-xl text-sm border ${formMed.period === p ? 'bg-emerald-50 border-emerald-500 text-emerald-700 font-bold' : 'border-slate-100 text-slate-400'}`}>{p}</button>
                                 ))}
                             </div>
