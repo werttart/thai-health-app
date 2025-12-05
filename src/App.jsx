@@ -10,7 +10,7 @@ import {
   Share2, Check, Edit2, X, AlertTriangle, Download, Type, LogOut, Lock, Mail, Printer, Lightbulb,
   XCircle, CheckCircle, Sun, Moon, Sunrise, Sunset, Smartphone, Map, History,
   CalendarDays, CalendarRange, Infinity as InfinityIcon, ChevronDown, Share, Navigation, TestTube,
-  FileDigit, List
+  FileDigit, List, Save
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -437,30 +437,37 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const handleAddHealth = async () => { 
         setSubmitting(true);
         try {
-            const commonData = { dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' };
-            const promises = [];
+            const baseData = { dateStr: getTodayStr(), timestamp: serverTimestamp(), note: formHealth.note || '' };
+            const batch = [];
 
-            if (formHealth.sys && formHealth.dia) {
-                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'bp', sys: Number(formHealth.sys), dia: Number(formHealth.dia) }));
+            // Add BP if filled
+            if(formHealth.sys && formHealth.dia) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'bp', sys: Number(formHealth.sys), dia: Number(formHealth.dia) }));
             }
-            if (formHealth.sugar) {
-                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'sugar', sugar: Number(formHealth.sugar) }));
+            // Add Sugar if filled
+            if(formHealth.sugar) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'sugar', sugar: Number(formHealth.sugar) }));
             }
-            if (formHealth.weight) {
-                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'weight', weight: Number(formHealth.weight) }));
+            // Add Weight if filled
+            if(formHealth.weight) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'weight', weight: Number(formHealth.weight) }));
             }
-            if (formHealth.hba1c || formHealth.lipid || formHealth.egfr) {
-                promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { 
-                    ...commonData, type: 'lab', 
-                    hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr 
+            // Add Lab if filled (Any of the fields)
+            if(formHealth.hba1c || formHealth.lipid || formHealth.egfr) {
+                batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { 
+                    ...baseData, type: 'lab', 
+                    hba1c: formHealth.hba1c ? Number(formHealth.hba1c) : null, 
+                    lipid: formHealth.lipid ? Number(formHealth.lipid) : null, 
+                    egfr: formHealth.egfr ? Number(formHealth.egfr) : null 
                 }));
             }
-            
-            if (promises.length === 0 && formHealth.note) {
-                 promises.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...commonData, type: 'note' }));
+
+            if (batch.length === 0 && formHealth.note) {
+                 // Save just a note if no data
+                 batch.push(addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), { ...baseData, type: 'note' }));
             }
 
-            await Promise.all(promises);
+            await Promise.all(batch);
             
             setShowInputModal(false); 
             setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '', note: '' });
@@ -823,62 +830,89 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
             </div>
 
             {/* MODALS */}
+            {/* UPDATED: Health Input Modal with Grid Layout */}
             {showInputModal && (
                 <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-end sm:items-center justify-center sm:p-4 backdrop-blur-sm animate-fade-in">
-                    <div className="bg-white w-full sm:max-w-sm rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
-                        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6"></div>
-                        <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">บันทึกข้อมูลวันนี้</h2>
+                    <div className="bg-white w-full sm:max-w-md rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto relative">
+                         {/* Close Button */}
+                         <button onClick={() => setShowInputModal(false)} className="absolute top-4 right-4 bg-slate-100 rounded-full p-2 text-slate-400 hover:bg-slate-200"><X size={20}/></button>
+                         
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-800">บันทึกข้อมูลวันนี้</h2>
+                            <p className="text-xs text-slate-400">{formatFullDateThai(new Date())}</p>
+                        </div>
                         
-                        <div className="space-y-6">
-                            {/* BP Section */}
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                        <div className="space-y-4">
+                            {/* BP Section: Grid Layout 2 Columns */}
+                            <div className="p-4 rounded-2xl border border-slate-100 shadow-sm">
                                 <div className="flex items-center gap-2 mb-3">
-                                    <div className="bg-red-100 p-1.5 rounded-lg text-red-600"><Heart size={16}/></div>
-                                    <span className="font-bold text-slate-700 text-sm">ความดันโลหิต</span>
+                                    <div className="bg-red-50 p-1.5 rounded-lg text-red-500"><Heart size={18}/></div>
+                                    <span className="font-bold text-slate-700">ความดันโลหิต</span>
                                 </div>
-                                <div className="flex gap-3">
-                                    <input type="number" placeholder="บน (120)" className="flex-1 p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.sys} onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/>
-                                    <input type="number" placeholder="ล่าง (80)" className="flex-1 p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.dia} onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="relative">
+                                        <label className="text-[10px] text-slate-400 absolute top-2 left-3">SYS (บน)</label>
+                                        <input type="number" className="w-full pt-6 pb-2 px-3 bg-slate-50 rounded-xl text-center font-bold text-xl text-slate-700 outline-none border border-transparent focus:border-emerald-500 transition-all placeholder-slate-300" placeholder="120" value={formHealth.sys} onChange={e => setFormHealth({...formHealth, sys: e.target.value})}/>
+                                    </div>
+                                    <div className="relative">
+                                        <label className="text-[10px] text-slate-400 absolute top-2 left-3">DIA (ล่าง)</label>
+                                        <input type="number" className="w-full pt-6 pb-2 px-3 bg-slate-50 rounded-xl text-center font-bold text-xl text-slate-700 outline-none border border-transparent focus:border-emerald-500 transition-all placeholder-slate-300" placeholder="80" value={formHealth.dia} onChange={e => setFormHealth({...formHealth, dia: e.target.value})}/>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Sugar & Weight Row */}
-                            <div className="flex gap-3">
-                                <div className="flex-1 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="bg-orange-100 p-1.5 rounded-lg text-orange-600"><Droplet size={16}/></div>
-                                        <span className="font-bold text-slate-700 text-sm">น้ำตาล</span>
+                            {/* Sugar & Weight Row: Grid Layout */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
+                                    <div className="flex items-center gap-1 mb-2 text-orange-500">
+                                        <Droplet size={16}/>
+                                        <span className="text-xs font-bold">น้ำตาล</span>
                                     </div>
-                                    <input type="number" placeholder="mg/dL" className="w-full p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.sugar} onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>
+                                    <div className="flex items-baseline gap-1 w-full">
+                                        <input type="number" placeholder="-" className="w-full text-center font-bold text-xl text-slate-800 outline-none border-b border-slate-200 focus:border-orange-500 py-1" value={formHealth.sugar} onChange={e => setFormHealth({...formHealth, sugar: e.target.value})}/>
+                                        <span className="text-[10px] text-slate-400">mg/dL</span>
+                                    </div>
                                 </div>
-                                <div className="flex-1 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="bg-blue-100 p-1.5 rounded-lg text-blue-600"><Scale size={16}/></div>
-                                        <span className="font-bold text-slate-700 text-sm">น้ำหนัก</span>
+                                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center">
+                                    <div className="flex items-center gap-1 mb-2 text-blue-500">
+                                        <Scale size={16}/>
+                                        <span className="text-xs font-bold">น้ำหนัก</span>
                                     </div>
-                                    <input type="number" placeholder="kg" className="w-full p-3 bg-white rounded-xl text-center font-bold border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.weight} onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>
+                                    <div className="flex items-baseline gap-1 w-full">
+                                        <input type="number" placeholder="-" className="w-full text-center font-bold text-xl text-slate-800 outline-none border-b border-slate-200 focus:border-blue-500 py-1" value={formHealth.weight} onChange={e => setFormHealth({...formHealth, weight: e.target.value})}/>
+                                        <span className="text-[10px] text-slate-400">kg</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Lab Section */}
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            {/* Lab Section: Compact Grid */}
+                            <div className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
                                 <div className="flex items-center gap-2 mb-3">
-                                    <div className="bg-purple-100 p-1.5 rounded-lg text-purple-600"><TestTube size={16}/></div>
+                                    <TestTube size={16} className="text-purple-500"/>
                                     <span className="font-bold text-slate-700 text-sm">ผลเลือด (ถ้ามี)</span>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <input type="number" placeholder="HbA1c" className="p-2 bg-white rounded-xl text-center text-sm border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.hba1c} onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/>
-                                    <input type="number" placeholder="LDL" className="p-2 bg-white rounded-xl text-center text-sm border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.lipid} onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/>
-                                    <input type="number" placeholder="eGFR" className="p-2 bg-white rounded-xl text-center text-sm border border-slate-200 outline-none focus:border-emerald-500" value={formHealth.egfr} onChange={e => setFormHealth({...formHealth, egfr: e.target.value})}/>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="bg-white p-2 rounded-xl border border-slate-200">
+                                        <label className="text-[10px] text-slate-400 block text-center mb-1">HbA1c</label>
+                                        <input type="number" className="w-full text-center font-bold text-slate-700 outline-none" placeholder="-" value={formHealth.hba1c} onChange={e => setFormHealth({...formHealth, hba1c: e.target.value})}/>
+                                    </div>
+                                    <div className="bg-white p-2 rounded-xl border border-slate-200">
+                                        <label className="text-[10px] text-slate-400 block text-center mb-1">LDL</label>
+                                        <input type="number" className="w-full text-center font-bold text-slate-700 outline-none" placeholder="-" value={formHealth.lipid} onChange={e => setFormHealth({...formHealth, lipid: e.target.value})}/>
+                                    </div>
+                                    <div className="bg-white p-2 rounded-xl border border-slate-200">
+                                        <label className="text-[10px] text-slate-400 block text-center mb-1">eGFR</label>
+                                        <input type="number" className="w-full text-center font-bold text-slate-700 outline-none" placeholder="-" value={formHealth.egfr} onChange={e => setFormHealth({...formHealth, egfr: e.target.value})}/>
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Note Section */}
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 mb-2 block">อาการ / หมายเหตุ</label>
+                            <div className="relative">
+                                <FileText size={16} className="absolute top-4 left-4 text-slate-400"/>
                                 <textarea 
-                                    className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 outline-none focus:border-emerald-500 transition-all resize-none text-sm" 
-                                    placeholder="เช่น เวียนหัว, นอนน้อย, กินเค็มมา..." 
+                                    className="w-full pl-10 pr-4 py-4 bg-slate-50 rounded-2xl border border-transparent focus:border-emerald-500 focus:bg-white outline-none transition-all resize-none text-sm text-slate-700" 
+                                    placeholder="มีอาการอะไรเป็นพิเศษไหม? (เช่น เวียนหัว, นอนน้อย)" 
                                     rows="2"
                                     value={formHealth.note}
                                     onChange={e => setFormHealth({...formHealth, note: e.target.value})}
@@ -886,10 +920,9 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                             </div>
                         </div>
 
-                        <div className="mt-6 flex gap-3">
-                            <button onClick={() => setShowInputModal(false)} className="flex-1 py-4 text-slate-400 font-bold bg-slate-50 rounded-2xl hover:bg-slate-100">ยกเลิก</button>
-                            <button onClick={handleAddHealth} disabled={submitting} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex justify-center items-center">
-                                {submitting ? <Loader2 className="animate-spin"/> : 'บันทึกข้อมูล'}
+                        <div className="mt-6">
+                            <button onClick={handleAddHealth} disabled={submitting} className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold text-lg shadow-lg shadow-emerald-200 hover:bg-emerald-700 active:scale-95 transition-all flex justify-center items-center gap-2">
+                                {submitting ? <Loader2 className="animate-spin"/> : <><Save size={20}/> บันทึกข้อมูล</>}
                             </button>
                         </div>
                     </div>
