@@ -192,7 +192,9 @@ const MedicineGroup = ({ title, icon: Icon, meds, medHistory, toggleMed, canEdit
             </div>
             <div className="space-y-3">
                 {meds.map(med => {
-                    const isTaken = (medHistory?.takenMeds || []).includes(med.id);
+                    // FIX: Access the specific date log from medHistory
+                    const isTaken = (medHistory[getTodayStr()]?.takenMeds || []).includes(med.id);
+                    
                     return (
                         <div key={med.id} onClick={() => canEdit && toggleMed(med.id)} className={`flex items-center justify-between p-4 rounded-3xl border transition-all duration-300 cursor-pointer ${isTaken ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100 shadow-sm hover:shadow-md'}`}>
                             <div className="flex items-center gap-4 flex-1">
