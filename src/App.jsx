@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Label
 } from 'recharts';
 import { 
   Heart, Pill, Activity, User, Plus, Phone, AlertCircle, 
   Home, MessageCircle, FileText, Shield, Stethoscope, 
   Send, QrCode, MapPin, Loader2, Scale, Droplet,
   Calendar as CalendarIcon, Clock, Users, Trash2, ChevronLeft, ChevronRight,
-  Share2, Check, Edit2, X, AlertTriangle, Download, Type, Navigation, LogOut, Lock, Mail, Printer, Lightbulb
+  Share2, Check, Edit2, X, AlertTriangle, Download, Type, Navigation, LogOut, Lock, Mail, Printer, Lightbulb,
+  XCircle, CheckCircle
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -79,6 +80,20 @@ const HEALTH_TIPS = [
 ];
 
 // --- Components ---
+
+const Toast = ({ message, type, onClose }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+        <div className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl transition-all animate-fade-in-down ${type === 'error' ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'}`}>
+            {type === 'error' ? <XCircle size={20}/> : <CheckCircle size={20}/>}
+            <span className="font-bold text-sm">{message}</span>
+        </div>
+    );
+};
 
 const StatCard = ({ title, value, unit, icon: Icon, color, onClick, statusType, rawValue, fontSize }) => (
   <div onClick={onClick} className="bg-white p-5 rounded-[24px] shadow-sm border border-slate-100 flex-1 min-w-[100px] cursor-pointer hover:shadow-md transition-all active:scale-95 relative overflow-hidden group">
@@ -275,6 +290,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [fontSize, setFontSize] = useState('normal'); 
     const [gpsLocation, setGpsLocation] = useState(null);
     const [todayTip, setTodayTip] = useState(HEALTH_TIPS[0]);
+    const [notification, setNotification] = useState(null);
 
     const [showDoctorMode, setShowDoctorMode] = useState(false);
     const [showInputModal, setShowInputModal] = useState(false);
@@ -292,9 +308,9 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const [showEditProfile, setShowEditProfile] = useState(false); const [formProfile, setFormProfile] = useState({});
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, collection: null, id: null, title: '' });
     
-    // Permission check: Can this user edit data?
-    // Edited: Allow both patient AND caregiver to edit
     const canEdit = currentUserRole === 'patient' || currentUserRole === 'caregiver';
+
+    const showToast = (msg, type = 'success') => setNotification({ message: msg, type });
 
     useEffect(() => {
         if (!targetUid) return;
@@ -312,7 +328,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                 setProfile(data); 
                 setFormProfile(data); 
                 
-                // Self-Healing for missing public ID (Important Fix)
                 if (currentUserRole === 'patient' && data.shortId) {
                     const publicIdsRef = collection(db, 'artifacts', APP_COLLECTION, 'public_smart_ids');
                     const qSmart = query(publicIdsRef, where("smartId", "==", data.shortId));
@@ -322,7 +337,6 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                     }
                 }
             } else {
-                // If profile is missing, create generic one
                 if(currentUserRole === 'patient') {
                     const sid = generateSmartId();
                     await setDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'profile', 'main'), { name: "ผู้ใช้งานใหม่", shortId: sid, created: serverTimestamp() });
@@ -348,18 +362,34 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         setSubmitting(true);
         try {
             let data = { type: inputType, dateStr: getTodayStr(), timestamp: serverTimestamp() }; 
-            // Important: Parse numbers before saving!
-            if(inputType === 'bp') data = { ...data, sys: Number(formHealth.sys), dia: Number(formHealth.dia) }; 
-            else if(inputType === 'sugar') data = { ...data, sugar: Number(formHealth.sugar) }; 
-            else if(inputType === 'weight') data = { ...data, weight: parseFloat(formHealth.weight) };
-            else if(inputType === 'lab') data = { ...data, hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr };
+            
+            // Input Validation
+            if (inputType === 'bp') {
+                const sys = Number(formHealth.sys);
+                const dia = Number(formHealth.dia);
+                if (sys < 50 || sys > 300 || dia < 30 || dia > 200) {
+                    throw new Error("ค่าความดันดูผิดปกติ กรุณาตรวจสอบ");
+                }
+                data = { ...data, sys, dia };
+            } else if(inputType === 'sugar') {
+                const sugar = Number(formHealth.sugar);
+                if (sugar < 20 || sugar > 800) throw new Error("ค่าน้ำตาลดูผิดปกติ");
+                data = { ...data, sugar };
+            } else if(inputType === 'weight') {
+                const weight = parseFloat(formHealth.weight);
+                if (weight < 2 || weight > 300) throw new Error("น้ำหนักดูผิดปกติ");
+                data = { ...data, weight };
+            } else if(inputType === 'lab') {
+                data = { ...data, hba1c: formHealth.hba1c, lipid: formHealth.lipid, egfr: formHealth.egfr };
+            }
             
             await addDoc(collection(db, 'artifacts', APP_COLLECTION, 'users', targetUid, 'health_logs'), data); 
             setShowInputModal(false); 
             setFormHealth({ sys: '', dia: '', sugar: '', weight: '', hba1c: '', lipid: '', egfr: '' });
+            showToast('บันทึกข้อมูลสำเร็จ');
         } catch(e) {
             console.error(e);
-            alert("บันทึกข้อมูลไม่สำเร็จ");
+            showToast(e.message || "บันทึกข้อมูลไม่สำเร็จ", 'error');
         } finally {
             setSubmitting(false);
         }
@@ -378,12 +408,12 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
     const confirmDeleteAction = async () => { 
         await deleteDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', targetUid, deleteConfirm.collection, deleteConfirm.id)); 
         setDeleteConfirm({ isOpen: false, collection: null, id: null, title: '' }); 
+        showToast('ลบรายการสำเร็จ');
     };
     
-    // Helper wrapper to prevent closing modal if save fails
     const handleSave = async (fn) => {
         setSubmitting(true);
-        try { await fn(); } catch(e) { console.error(e); alert("เกิดข้อผิดพลาด"); }
+        try { await fn(); showToast('บันทึกสำเร็จ'); } catch(e) { console.error(e); showToast("เกิดข้อผิดพลาด", 'error'); }
         setSubmitting(false);
     };
 
@@ -417,7 +447,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         if (navigator.geolocation) { 
             navigator.geolocation.getCurrentPosition(
                 (p) => setGpsLocation(`${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`),
-                (err) => { console.error(err); alert("ไม่สามารถดึงพิกัดได้ กรุณาเปิด GPS"); }
+                (err) => { console.error(err); showToast("ไม่สามารถดึงพิกัดได้ กรุณาเปิด GPS", 'error'); }
             ); 
         } else setGpsLocation("อุปกรณ์ไม่รองรับ"); 
     };
@@ -426,6 +456,7 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
         const data = { profile, medications: meds, appointments, logs: healthLogs, exportDate: new Date().toISOString() }; 
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data)); 
         const a = document.createElement('a'); a.href = dataStr; a.download = `backup_${profile?.name || 'patient'}_${getTodayStr()}.json`; a.click(); 
+        showToast('ดาวน์โหลดไฟล์ Backup แล้ว');
     };
 
     if (loading) return <div className="h-screen flex flex-col gap-4 items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-blue-600" size={48}/><p className="text-slate-400 text-sm font-medium animate-pulse">กำลังโหลดข้อมูล...</p></div>;
@@ -436,6 +467,8 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
 
     return (
         <div className="pb-24 animate-fade-in relative font-sans bg-slate-50 min-h-screen">
+            {notification && <Toast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
+
             {/* Header */}
             <div className="bg-white p-5 pt-8 pb-4 sticky top-0 z-30 shadow-sm flex justify-between items-center rounded-b-[32px]">
                 <div className="flex items-center gap-4">
@@ -506,7 +539,11 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                     <LineChart data={bpData}>
                                         <CartesianGrid stroke="#f1f5f9" vertical={false}/>
                                         <XAxis dataKey="day" tick={{fontSize:10, fill:'#94a3b8'}} axisLine={false} tickLine={false}/>
+                                        <YAxis domain={[60, 180]} hide/>
                                         <Tooltip contentStyle={{borderRadius:'16px', border:'none', boxShadow:'0 10px 15px -3px rgb(0 0 0 / 0.1)'}}/>
+                                        <ReferenceLine y={140} stroke="#ef4444" strokeDasharray="3 3">
+                                            <Label value="สูง (140)" position="insideTopRight" fill="#ef4444" fontSize={10}/>
+                                        </ReferenceLine>
                                         <Line type="monotone" dataKey="sys" stroke="#ec4899" strokeWidth={3} dot={{r:4, fill:'#ec4899', strokeWidth:2, stroke:'#fff'}}/>
                                         <Line type="monotone" dataKey="dia" stroke="#3b82f6" strokeWidth={3} dot={{r:4, fill:'#3b82f6', strokeWidth:2, stroke:'#fff'}}/>
                                     </LineChart> 
@@ -514,7 +551,11 @@ const PatientDashboard = ({ targetUid, currentUserRole, onBack }) => {
                                     <LineChart data={sugarData}>
                                         <CartesianGrid stroke="#f1f5f9" vertical={false}/>
                                         <XAxis dataKey="day" tick={{fontSize:10, fill:'#94a3b8'}} axisLine={false} tickLine={false}/>
+                                        <YAxis domain={[60, 200]} hide/>
                                         <Tooltip contentStyle={{borderRadius:'16px', border:'none', boxShadow:'0 10px 15px -3px rgb(0 0 0 / 0.1)'}}/>
+                                        <ReferenceLine y={125} stroke="#ef4444" strokeDasharray="3 3">
+                                            <Label value="เบาหวาน (125)" position="insideTopRight" fill="#ef4444" fontSize={10}/>
+                                        </ReferenceLine>
                                         <Line type="monotone" dataKey="sugar" stroke="#10b981" strokeWidth={3} dot={{r:4, fill:'#10b981', strokeWidth:2, stroke:'#fff'}}/>
                                     </LineChart>
                                 }
@@ -703,6 +744,9 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [adding, setAdding] = useState(false);
+    const [notification, setNotification] = useState(null);
+
+    const showToast = (msg, type = 'success') => setNotification({ message: msg, type });
 
     useEffect(() => {
         const unsub = onSnapshot(collection(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching'), (snap) => {
@@ -735,6 +779,7 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
                     addedAt: serverTimestamp()
                 });
                 setShowAddModal(false); setAddId('');
+                showToast('เชื่อมต่อสำเร็จ');
             } else {
                 setErrorMsg('ไม่พบรหัส Smart ID นี้ในระบบ');
             }
@@ -745,9 +790,17 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
             setAdding(false);
         }
     };
+    
+    const handleUnlink = async (e, patientUid) => {
+        e.stopPropagation();
+        if(!confirm('คุณต้องการเลิกติดตามคนไข้นี้ใช่ไหม?')) return;
+        await deleteDoc(doc(db, 'artifacts', APP_COLLECTION, 'users', user.uid, 'watching', patientUid));
+        showToast('เลิกติดตามเรียบร้อย');
+    };
 
     return (
         <div className="bg-slate-50 min-h-screen p-5 animate-fade-in relative font-sans">
+            {notification && <Toast message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
             <div className="absolute top-[-10%] right-[-20%] w-[300px] h-[300px] bg-blue-100 rounded-full blur-[80px] opacity-60"></div>
             
             <div className="relative z-10 pt-6">
@@ -758,9 +811,12 @@ const CaregiverHome = ({ user, onSelectPatient }) => {
 
                 <div className="grid gap-4">
                     {patients.map(p => (
-                        <div key={p.uid} onClick={() => onSelectPatient(p.uid)} className="bg-white p-5 rounded-[28px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer active:scale-95 transition-all hover:border-blue-200 hover:shadow-md group">
+                        <div key={p.uid} onClick={() => onSelectPatient(p.uid)} className="bg-white p-5 rounded-[28px] shadow-sm border border-slate-100 flex items-center justify-between cursor-pointer active:scale-95 transition-all hover:border-blue-200 hover:shadow-md group relative">
                             <div className="flex items-center gap-5"><div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-blue-200">{p.name.charAt(0)}</div><div><h3 className="font-bold text-slate-800 text-lg group-hover:text-blue-600 transition-colors">{p.name}</h3><p className="text-sm text-slate-400">คนไข้</p></div></div>
-                            <div className="bg-slate-50 p-2 rounded-full group-hover:bg-blue-50 transition-colors"><ChevronRight className="text-slate-300 group-hover:text-blue-500"/></div>
+                            <div className="flex items-center gap-2">
+                                <button onClick={(e) => handleUnlink(e, p.uid)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors z-10"><Trash2 size={18}/></button>
+                                <div className="bg-slate-50 p-2 rounded-full group-hover:bg-blue-50 transition-colors"><ChevronRight className="text-slate-300 group-hover:text-blue-500"/></div>
+                            </div>
                         </div>
                     ))}
                     <button onClick={() => setShowAddModal(true)} className="bg-white p-5 rounded-[28px] border-2 border-dashed border-slate-200 flex items-center justify-center gap-3 text-slate-400 hover:bg-slate-50 hover:border-blue-300 hover:text-blue-500 transition-all font-bold"><Plus/> เพิ่มคนไข้ใหม่</button>
